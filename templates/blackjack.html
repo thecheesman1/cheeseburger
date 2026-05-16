@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="game-box">
+    <h2>🃏 Blackjack</h2>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+    {% if result %}
+        <div class="blackjack-hand" id="resultHand">
+            <div class="label">Your hand</div>
+            <div class="cards" id="pCards">{{ result.get('p_cards', '') }}</div>
+        </div>
+        <div class="blackjack-hand" id="resultDealerHand">
+            <div class="label">Dealer hand</div>
+            <div class="cards" id="dCards">{{ result.get('d_cards', '') }}</div>
+        </div>
+        <div id="resultOutcome" style="display:none;">
+            <div class="result-line">{{ result['outcome'] }}</div>
+            {% if result['net'] > 0 %}
+                <p style="color:#4ade80;font-weight:700;">+${{ result['net'] }}</p>
+            {% elif result['net'] == 0 %}
+                <p style="color:#888;font-weight:700;">Push — bet returned</p>
+            {% else %}
+                <p style="color:#ff6b6b;font-weight:700;">-${{ result['net']|abs }}</p>
+            {% endif %}
+            <a href="{{ url_for('blackjack') }}" class="btn" style="display:inline-block;width:auto;padding:0.75rem 2rem;text-decoration:none;">Play Again</a>
+        </div>
+        <script>
+        (function() {
+            var pCards = document.getElementById('pCards');
+            var dCards = document.getElementById('dCards');
+            var pText = pCards.textContent.trim().split(/\s+/);
+            var dText = dCards.textContent.trim().split(/\s+/);
+            pCards.innerHTML = pText.map(function(c) { return '<span class="card-slot">' + c + '</span>'; }).join('');
+            dCards.innerHTML = dText.map(function(c) { return '<span class="card-slot">' + c + '</span>'; }).join('');
+            document.getElementById('resultHand').classList.add('dealing');
+            document.getElementById('resultDealerHand').classList.add('dealing');
+            var allSlots = document.querySelectorAll('#resultHand .card-slot, #resultDealerHand .card-slot');
+            allSlots.forEach(function(s, i) {
+                setTimeout(function() { s.classList.add('dealt'); }, i * 150);
+            });
+            setTimeout(function() {
+                document.getElementById('resultOutcome').style.display = 'block';
+            }, allSlots.length * 150 + 300);
+        })();
+        </script>
+
+    {% elif game %}
+        <div class="blackjack-hand dealing" id="gameHand">
+            <div class="label">Your hand: <span id="pSum">{{ game['p_hand']|sum }}</span></div>
+            <div class="cards" id="pGameCards">
+                {% for c in game['p_hand'] %}
+                    <span class="card-slot">{{ c }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="blackjack-hand dealing" id="dealerHand">
+            <div class="label">Dealer showing: <span id="dUp">{{ game['d_hand'][0] }}</span></div>
+            <div class="cards" id="dGameCards">
+                <span class="card-slot">{{ game['d_hand'][0] }}</span>
+                {% if game['d_hand']|length > 1 %}
+                    {% for c in game['d_hand'][1:] %}
+                        <span class="card-slot">{{ c }}</span>
+                    {% endfor %}
+                {% else %}
+                    <span class="card-slot">?</span>
+                {% endif %}
+            </div>
+        </div>
+        <script>
+        (function() {
+            var slots = document.querySelectorAll('#gameHand .card-slot, #dealerHand .card-slot');
+            slots.forEach(function(s, i) {
+                setTimeout(function() { s.classList.add('dealt'); }, i * 200 + 200);
+            });
+        })();
+        </script>
+        {% if game.get('standing') or game.get('bust') %}
+            <div class="result-line">
+                {% if game.get('bust') %}Bust!{% endif %}
+            </div>
+        {% else %}
+            <form method="POST" style="margin-top:1rem;">
+                <input type="hidden" name="action" value="hit">
+                <button type="submit">Hit</button>
+            </form>
+            <form method="POST" style="margin-top:0.5rem;">
+                <input type="hidden" name="action" value="stand">
+                <button type="submit">Stand</button>
+            </form>
+        {% endif %}
+
+    {% else %}
+        <form method="POST">
+            <input type="hidden" name="action" value="deal">
+            <label for="bet" style="font-weight:600;color:#aaa;display:block;margin-bottom:0.4rem;">Bet amount</label>
+            <input type="number" name="bet" id="bet" min="10" value="10" required>
+            <button type="submit">Deal 🃏</button>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}

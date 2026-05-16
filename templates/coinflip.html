@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="game-box">
+    <h2>🪙 Coin Flip</h2>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    {% if result %}
+        <div class="coin" id="coin">🪙</div>
+        <div id="coinResult" style="display:none;">
+            <div class="result-line">
+                It was <strong>{{ result['flip'] }}</strong> — you called <strong>{{ result['call'] }}</strong>
+            </div>
+            <div class="result-line">
+                {% if result['win'] > 0 %}
+                    <span class="net-positive">You won ${{ result['win'] }}!</span>
+                {% else %}
+                    <span class="net-negative">Lost ${{ result['net']|abs }}</span>
+                {% endif %}
+            </div>
+            <a href="{{ url_for('coinflip') }}" class="btn" style="display:inline-block;width:auto;padding:0.75rem 2rem;text-decoration:none;">Flip Again</a>
+        </div>
+        <script>
+        (function() {
+            var coin = document.getElementById('coin');
+            var symbols = ['🪙', '🪙', '🪙', '🪙'];
+            coin.classList.add('flipping');
+            var interval = setInterval(function() {
+                coin.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+            }, 80);
+            setTimeout(function() {
+                clearInterval(interval);
+                coin.classList.remove('flipping');
+                coin.classList.add('landing');
+                coin.textContent = '🪙';
+                setTimeout(function() {
+                    coin.classList.remove('landing');
+                    {% if result['win'] > 0 %}
+                    coin.classList.add('win-coin');
+                    {% endif %}
+                    document.getElementById('coinResult').style.display = 'block';
+                }, 500);
+            }, 800);
+        })();
+        </script>
+    {% else %}
+        <form method="POST">
+            <label for="bet" style="font-weight:600;color:#aaa;display:block;margin-bottom:0.4rem;">Bet amount</label>
+            <input type="number" name="bet" id="bet" min="10" value="10" required>
+            <div class="btn-group">
+                <button type="submit" name="call" value="heads" style="flex:1;">Heads</button>
+                <button type="submit" name="call" value="tails" style="flex:1;">Tails</button>
+            </div>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}

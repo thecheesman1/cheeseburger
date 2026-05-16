@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="game-box">
+    <h2>🎰 Slots</h2>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    {% if result %}
+        <div class="reels" id="reels">
+            {% for r in result['reels'] %}
+                <span class="reel" data-symbol="{{ r }}">
+                    <span class="reel-inner">🍒</span>
+                </span>
+            {% endfor %}
+        </div>
+        <div id="resultDisplay" style="display:none;">
+            <div class="result-line">
+                {% if result['win'] > 0 %}
+                    <span class="net-positive">You won ${{ result['win'] }}!</span>
+                {% else %}
+                    <span class="net-negative">No luck this time</span>
+                {% endif %}
+            </div>
+            <p style="color:#888;margin-bottom:1rem;">
+                {% if result['net'] >= 0 %}
+                    Net: <span class="net-positive">+${{ result['net'] }}</span>
+                {% else %}
+                    Net: <span class="net-negative">-${{ result['net']|abs }}</span>
+                {% endif %}
+            </p>
+            <a href="{{ url_for('slots') }}" class="btn" style="display:inline-block;width:auto;padding:0.75rem 2rem;text-decoration:none;">Play Again</a>
+        </div>
+        <script>
+        (function() {
+            var reels = document.querySelectorAll('#reels .reel');
+            var symbols = ['🍒', '🍋', '🍊', '🍇', '💎', '7️⃣'];
+            var interval = setInterval(function() {
+                reels.forEach(function(r) {
+                    r.querySelector('.reel-inner').textContent = symbols[Math.floor(Math.random() * symbols.length)];
+                });
+            }, 80);
+            setTimeout(function() {
+                reels.forEach(function(r, i) {
+                    setTimeout(function() {
+                        r.classList.remove('spinning');
+                        r.classList.add('spin-stop-' + (i + 1));
+                        r.querySelector('.reel-inner').textContent = r.dataset.symbol;
+                    }, i * 300);
+                });
+                setTimeout(function() {
+                    clearInterval(interval);
+                    {% if result['win'] > 0 %}
+                    reels.forEach(function(r) { r.classList.add('win'); });
+                    {% endif %}
+                    document.getElementById('resultDisplay').style.display = 'block';
+                }, reels.length * 300 + 300);
+            }, 600);
+            reels.forEach(function(r) { r.classList.add('spinning'); });
+        })();
+        </script>
+    {% else %}
+        <form method="POST">
+            <label for="bet" style="font-weight:600;color:#aaa;display:block;margin-bottom:0.4rem;">Bet amount</label>
+            <input type="number" name="bet" id="bet" min="10" value="10" required>
+            <button type="submit">Spin 🎰</button>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}

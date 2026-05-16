@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="game-box">
+    <h2>🎲 Dice</h2>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    {% if result %}
+        <div class="dice-area" id="diceArea">
+            <span class="die" data-value="{{ result['dice'][0] }}">🎲</span>
+            <span class="die" data-value="{{ result['dice'][1] }}">🎲</span>
+        </div>
+        <div id="diceResult" style="display:none;">
+            <div class="result-line">Total: <strong>{{ result['total'] }}</strong> — You guessed <strong>{{ result['guess'] }}</strong></div>
+            <div class="result-line">
+                {% if result['win'] > 0 %}
+                    <span class="net-positive">You won ${{ result['win'] }}! (6x payout)</span>
+                {% else %}
+                    <span class="net-negative">Lost ${{ result['net']|abs }}</span>
+                {% endif %}
+            </div>
+            <a href="{{ url_for('dice') }}" class="btn" style="display:inline-block;width:auto;padding:0.75rem 2rem;text-decoration:none;">Roll Again</a>
+        </div>
+        <script>
+        (function() {
+            var dice = document.querySelectorAll('#diceArea .die');
+            var icons = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+            dice.forEach(function(d) { d.classList.add('rolling'); });
+            var interval = setInterval(function() {
+                dice.forEach(function(d) {
+                    d.textContent = icons[Math.floor(Math.random() * icons.length)];
+                });
+            }, 80);
+            setTimeout(function() {
+                dice.forEach(function(d, i) {
+                    setTimeout(function() {
+                        d.classList.remove('rolling');
+                        d.classList.add('roll-stop');
+                        d.textContent = '🎲 ' + d.dataset.value;
+                    }, i * 250);
+                });
+                setTimeout(function() {
+                    clearInterval(interval);
+                    var allWin = {{ 'true' if result['win'] > 0 else 'false' }};
+                    if (allWin) {
+                        dice.forEach(function(d) { d.classList.add('win-die'); });
+                    }
+                    document.getElementById('diceResult').style.display = 'block';
+                }, dice.length * 250 + 300);
+            }, 700);
+        })();
+        </script>
+    {% else %}
+        <form method="POST">
+            <label for="bet" style="font-weight:600;color:#aaa;display:block;margin-bottom:0.4rem;">Bet amount</label>
+            <input type="number" name="bet" id="bet" min="10" value="10" required>
+            <label for="guess" style="font-weight:600;color:#aaa;display:block;margin-bottom:0.4rem;">Guess (2–12)</label>
+            <input type="number" name="guess" id="guess" min="2" max="12" value="7" required>
+            <button type="submit">Roll 🎲</button>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}
