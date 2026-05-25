@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.lb-table{width:100%;border-collapse:collapse;margin:1rem 0}
+.lb-table th{text-align:left;padding:0.6rem 0.8rem;color:#888;font-size:0.8rem;text-transform:uppercase;border-bottom:1px solid #2a2a4a}
+.lb-table td{padding:0.6rem 0.8rem;border-bottom:1px solid #1a1a2e;font-size:0.9rem}
+.lb-table tr:hover{background:rgba(240,192,64,0.03)}
+.lb-table .rank{font-weight:800;font-size:1.1rem;min-width:40px}
+.lb-table .rank.gold{color:#f0c040}
+.lb-table .rank.silver{color:#c0c0c0}
+.lb-table .rank.bronze{color:#cd7f32}
+.lb-table .bot-tag{font-size:0.6rem;background:rgba(96,165,250,0.15);color:#60a5fa;padding:0.1rem 0.4rem;border-radius:3px;margin-left:0.3rem;text-transform:uppercase}
+.lb-table .bal{color:#4ade80;font-weight:700}
+</style>
+
+<div class="game-box" style="max-width:700px">
+    <h2>🏆 Leaderboard</h2>
+    <p style="color:#888;margin-bottom:1rem;">Top 20 richest players</p>
+    <table class="lb-table">
+        <thead><tr><th>#</th><th>Player</th><th>Balance</th></tr></thead>
+        <tbody>
+        {% for p in top %}
+        <tr>
+            <td class="rank {% if loop.index == 1 %}gold{% elif loop.index == 2 %}silver{% elif loop.index == 3 %}bronze{% endif %}">
+                #{{ loop.index }}
+            </td>
+            <td>
+                {{ p['username'] }}
+                {% if p['is_bot'] %}<span class="bot-tag">bot</span>{% endif %}
+            </td>
+            <td class="bal">${{ '{:,.0f}'.format(p['balance']) }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

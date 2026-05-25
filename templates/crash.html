@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+#crash-chart{background:#0a0a0f;border:1px solid #2a2a4a;border-radius:12px;height:320px;position:relative;overflow:hidden;margin:1rem 0}
+#crash-chart canvas{width:100%;height:100%;display:block}
+.crash-overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;background:rgba(0,0,0,0.9);z-index:5}
+.crash-overlay .big-text{font-size:2.5rem;font-weight:800;color:#f0c040}
+.crash-overlay .sub-text{color:#ccc;font-size:1rem;margin-top:0.4rem}
+.crash-hud{display:flex;justify-content:space-between;align-items:center;margin:1rem 0;gap:1rem}
+.crash-hud .mult-display{font-size:3rem;font-weight:800;color:#4ade80;text-shadow:0 0 20px rgba(74,222,128,0.4);min-width:120px}
+.crash-hud .bet-info{text-align:right}
+.crash-hud .profit{color:#4ade80;font-size:1.5rem;font-weight:700}
+.cashout-btn{background:linear-gradient(135deg,#ff6b6b,#e55);border:none;border-radius:8px;color:#fff;font-size:1.2rem;font-weight:700;padding:0.75rem 2rem;cursor:pointer;transition:all .15s;width:100%}
+.cashout-btn:hover{transform:scale(1.03);box-shadow:0 4px 20px rgba(255,107,107,0.4)}
+.cashout-btn:disabled{opacity:0.3;cursor:not-allowed;transform:none}
+.player-list{display:flex;flex-direction:column;gap:0.3rem;max-height:200px;overflow-y:auto;margin-top:0.5rem}
+.player-row{display:flex;align-items:center;justify-content:space-between;background:#0a0a0f;border:1px solid #2a2a4a;border-radius:8px;padding:0.4rem 0.8rem;font-size:0.85rem}
+.player-row .name{font-weight:600;color:#fff;min-width:80px}
+.player-row .bet{color:#f0c040;font-weight:600}
+.player-row .status{font-size:0.75rem;padding:0.15rem 0.5rem;border-radius:4px;font-weight:600}
+.player-row .status.joined{background:rgba(240,192,64,0.1);color:#f0c040}
+.player-row .status.playing{background:rgba(74,222,128,0.1);color:#4ade80}
+.player-row .status.cashed{background:rgba(74,222,128,0.15);color:#4ade80}
+.player-row .status.busted{background:rgba(255,107,107,0.15);color:#ff6b6b}
+.bet-form{display:flex;gap:0.5rem;align-items:flex-end}
+.bet-form input{flex:1;padding:0.75rem;background:#0a0a0f;border:1px solid #2a2a4a;border-radius:8px;color:#fff;font-size:1rem;font-family:'Inter',sans-serif}
+.bet-form input:focus{outline:none;border-color:#f0c040}
+.bet-form button{flex-shrink:0;padding:0.75rem 1.5rem}
+#countdown{font-size:2.5rem;font-weight:800;color:#f0c040;text-align:center}
+#countdown.warn{color:#ff6b6b;animation:pulse 0.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+</style>
+
+<div class="game-box" style="max-width:750px">
+    <h2>🚀 Multiplayer Crash — Round <span id="roundNum">{{ room['round'] + 1 }}</span></h2>
+
+    <div class="crash-history" id="crashHistory" style="display:flex;gap:0.3rem;justify-content:center;margin-bottom:0.5rem;flex-wrap:wrap;"></div>
+
+    <div id="crash-chart">
+        <canvas id="crashCanvas"></canvas>
+        <div class="crash-overlay" id="overlayBetting">
+            <div class="big-text" id="countdown">{{ betting_duration }}</div>
+            <div class="sub-text">next round starts</div>
+        </div>
+        <div class="crash-overlay" id="overlayCrashed">
+            <div class="big-text" style="color:#ff6b6b">💥 CRASHED</div>
+            <div class="sub-text" id="crashedAt">at 0.00x</div>
+        </div>
+    </div>
+
+    <div class="crash-hud">
+        <div class="mult-display" id="multDisplay">1.00x</div>
+        <div class="bet-info" id="betInfo" style="display:none">
+            <div style="color:#aaa;font-size:0.85rem">Your bet: <span style="color:#fff">$<span id="myBet">0</span></span></div>
+            <div class="profit" id="profitDisplay">$0</div>
+        </div>
+    </div>
+
+    <div id="actionArea">
+        <div class="bet-form" id="betForm" style="display:none">
+            <input type="number" id="betInput" min="10000" value="10000" step="1000" placeholder="Bet amount">
+            <button type="button" id="joinBtn" class="btn" style="width:auto">Join</button>
+        </div>
+        <div id="cashoutArea" style="display:none">
+            <button class="cashout-btn" id="cashoutBtn" disabled>Cash Out</button>
+        </div>
+        <div id="spectateMsg" style="display:none;text-align:center;color:#888;padding:1rem">
+            Spectating — you can join next round
+        </div>
+    </div>
+
+    <div class="player-list" id="playerList"></div>
+</div>
+
+<script>
+(function(){
+    var crashHistory = document.getElementById('crashHistory');
+    var canvas = document.getElementById('crashCanvas'), ctx = canvas.getContext('2d');
+    var multDisplay = document.getElementById('multDisplay');
+    var profitDisplay = document.getElementById('profitDisplay');
+    var cashoutBtn = document.getElementById('cashoutBtn');
+    var joinBtn = document.getElementById('joinBtn');
+    var betForm = document.getElementById('betForm');
+    var cashoutArea = document.getElementById('cashoutArea');
+    var spectateMsg = document.getElementById('spectateMsg');
+    var overlayBetting = document.getElementById('overlayBetting');
+    var overlayCrashed = document.getElementById('overlayCrashed');
+    var betInfo = document.getElementById('betInfo');
+    var playerList = document.getElementById('playerList');
+    var myBet = document.getElementById('myBet');
+    var countdown = document.getElementById('countdown');
+    var crashedAt = document.getElementById('crashedAt');
+    var roundNum = document.getElementById('roundNum');
+
+    var phase = '{{ room["phase"] }}';
+    var joined = {{ 'true' if joined else 'false' }};
+    var crashPoint = {{ room.get('crash_point') or 'null' }};
+    var serverStart = {{ room.get('start_time') or 'null' }};
+    var running = false, done = false;
+    var localStart = null, dataPoints = [];
+    var pollTimer = null, animFrame = null;
+
+    function getMult(){
+        if(!serverStart || (done && phase !== 'crashed')) return 1.0;
+        var elapsed = (Date.now() / 1000) - serverStart;
+        var m = Math.pow(Math.E, elapsed * 0.08);
+        if(m > 1000) return 1000;
+        return m;
+    }
+
+    function serverMultFromState(s){ return s.multiplier || 1.0; }
+
+    function resize(){ canvas.width = canvas.parentElement.clientWidth; canvas.height = canvas.parentElement.clientHeight; }
+    resize(); window.addEventListener('resize', resize);
+
+    function draw(){
+        var w = canvas.width, h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        if(phase !== 'running' && phase !== 'crashed'){ animFrame = null; return; }
+        if(!serverStart && phase !== 'crashed'){ animFrame = requestAnimationFrame(draw); return; }
+
+        var mult, elapsed;
+        if(phase === 'crashed' && crashPoint){
+            mult = crashPoint;
+            elapsed = Math.log(crashPoint) / 0.08;
+        } else {
+            elapsed = (Date.now() / 1000) - serverStart;
+            mult = getMult();
+        }
+        if(mult < 1.0) mult = 1.0;
+
+        if(dataPoints.length === 0 || elapsed > dataPoints[dataPoints.length-1].t){
+            dataPoints.push({t: elapsed, m: mult});
+            if(dataPoints.length > 300) dataPoints.shift();
+        }
+
+        var maxT = Math.max(elapsed, 1.0), maxM = Math.max(mult, 2.5), pad = 30;
+        var xScale = (w - pad * 2) / maxT, yScale = (h - pad * 2) / maxM;
+
+        ctx.strokeStyle = '#1a1a2e'; ctx.lineWidth = 1;
+        for(var g = 1; g <= Math.ceil(maxM); g++){
+            var gy = h - pad - g * yScale;
+            ctx.beginPath(); ctx.moveTo(pad, gy); ctx.lineTo(w - pad, gy); ctx.stroke();
+            ctx.fillStyle = '#333'; ctx.font = '10px sans-serif'; ctx.fillText(g.toFixed(1) + 'x', 4, gy + 4);
+        }
+
+        ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 3;
+        ctx.shadowColor = 'rgba(74,222,128,0.5)'; ctx.shadowBlur = 8;
+        ctx.beginPath();
+        for(var i = 0; i < dataPoints.length; i++){
+            var x = pad + dataPoints[i].t * xScale, y = h - pad - dataPoints[i].m * yScale;
+            if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke(); ctx.shadowBlur = 0;
+
+        var cx = Math.min(pad + elapsed * xScale, w - pad);
+        var cy = h - pad - mult * yScale;
+        ctx.fillStyle = phase === 'crashed' ? '#ff6b6b' : '#4ade80';
+        ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2); ctx.fill();
+
+        if(phase === 'crashed' && crashPoint){
+            ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 2; ctx.setLineDash([5, 3]);
+            ctx.beginPath(); ctx.moveTo(cx, cy - 20); ctx.lineTo(cx, cy + 20); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#ff6b6b'; ctx.font = 'bold 12px sans-serif';
+            ctx.fillText('💥 '+crashPoint.toFixed(2)+'x', cx - 35, cy - 25);
+        }
+
+        multDisplay.textContent = mult.toFixed(2) + 'x';
+        if(joined && phase === 'running'){
+            var prof = Math.floor((parseInt(myBet.textContent.replace(/,/g,'')) || 0) * mult) - (parseInt(myBet.textContent.replace(/,/g,'')) || 0);
+            profitDisplay.textContent = '$' + prof.toLocaleString();
+        }
+        if(phase === 'running' && !done) animFrame = requestAnimationFrame(draw);
+    }
+
+    function renderHistory(hist){
+        crashHistory.innerHTML = '';
+        (hist||[]).forEach(function(h){
+            var t = document.createElement('span');
+            t.style.cssText = 'background:'+(h<2?'rgba(255,107,107,0.2)':h<5?'rgba(240,192,64,0.2)':'rgba(74,222,128,0.2)')+
+                ';color:'+(h<2?'#ff6b6b':h<5?'#f0c040':'#4ade80')+';padding:0.15rem 0.5rem;border-radius:4px;font-size:0.7rem;font-weight:700';
+            t.textContent = h.toFixed(2)+'x';
+            crashHistory.appendChild(t);
+        });
+    }
+
+    function renderPlayers(players){
+        playerList.innerHTML = '';
+        players.forEach(function(p){
+            var row = document.createElement('div'); row.className = 'player-row';
+            var sc = 'joined', st = 'Joined';
+            if(phase === 'running' || phase === 'crashed'){
+                if(p.busted){ sc = 'busted'; st = '💥 Busted'; }
+                else if(p.cashed_out_at != null){
+                    sc = 'cashed';
+                    st = '💰 ' + p.cashed_out_at.toFixed(2) + 'x +$' + Math.floor(p.bet * p.cashed_out_at).toLocaleString();
+                } else { sc = 'playing'; st = 'Playing...'; }
+            }
+            row.innerHTML = '<span class="name">'+p.username+'</span><span class="bet">$'+p.bet.toLocaleString()+'</span><span class="status '+sc+'">'+st+'</span>';
+            playerList.appendChild(row);
+        });
+    }
+
+    function onCrashed(cp){
+        phase = 'crashed'; crashPoint = cp; done = true;
+        cashoutBtn.disabled = true;
+        overlayCrashed.style.display = 'flex'; crashedAt.textContent = 'at '+cp.toFixed(2)+'x';
+        animFrame = requestAnimationFrame(draw);
+        if(animFrame) cancelAnimationFrame(animFrame);
+        draw();
+    }
+
+    function poll(){
+        fetch('{{ url_for("crash_state") }}')
+        .then(function(r){ return r.json(); })
+        .then(function(s){
+            var oldPhase = phase;
+            phase = s.phase;
+            roundNum.textContent = s.round + 1;
+            renderHistory(s.history);
+
+            if(s.start_time) serverStart = s.start_time;
+
+            if(s.phase === 'betting'){
+                overlayBetting.style.display = 'flex'; overlayCrashed.style.display = 'none';
+                betForm.style.display = joined ? 'none' : 'flex';
+                cashoutArea.style.display = 'none'; spectateMsg.style.display = 'none';
+                betInfo.style.display = 'none';
+                crashPoint = null; dataPoints = []; done = false; serverStart = null;
+                if(animFrame){ cancelAnimationFrame(animFrame); animFrame = null; }
+                ctx.clearRect(0, 0, canvas.width, canvas.height); multDisplay.textContent = '1.00x';
+                countdown.textContent = s.countdown;
+                if(s.countdown <= 3) countdown.classList.add('warn'); else countdown.classList.remove('warn');
+                overlayBetting.querySelector('.sub-text').textContent = s.countdown <= 3 ? 'round starting...' : 'place your bets';
+            } else if(s.phase === 'running'){
+                if(oldPhase === 'betting'){
+                    overlayBetting.style.display = 'none'; done = false;
+                    if(joined){ cashoutArea.style.display = 'block'; betInfo.style.display = 'block'; cashoutBtn.disabled = false; cashoutBtn.focus(); }
+                    else { spectateMsg.style.display = 'block'; }
+                    betForm.style.display = 'none';
+                }
+                multDisplay.textContent = s.multiplier.toFixed(2) + 'x';
+                if(!animFrame) animFrame = requestAnimationFrame(draw);
+            } else if(s.phase === 'crashed'){
+                if(oldPhase === 'running') onCrashed(s.crash_point);
+                countdown.textContent = s.countdown;
+                overlayBetting.style.display = 'none'; overlayCrashed.style.display = 'flex';
+                crashedAt.textContent = 'at '+s.crash_point.toFixed(2)+'x — next round in '+s.countdown+'s';
+                cashoutArea.style.display = 'none'; betForm.style.display = 'none'; spectateMsg.style.display = 'none';
+                joined = false;
+                if(s.countdown <= 2){ ctx.clearRect(0, 0, canvas.width, canvas.height); dataPoints = []; }
+            }
+            renderPlayers(s.players);
+        });
+    }
+
+    function cashOut(){
+        if(done || phase !== 'running') return;
+        var mult = getMult();
+        done = true; cashoutBtn.disabled = true;
+        var fd = new FormData(); fd.append('multiplier', mult.toFixed(2));
+        fetch('{{ url_for("crash_cashout") }}', {method:'POST', body:fd})
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            if(d.busted){
+                overlayCrashed.style.display = 'flex';
+                overlayCrashed.querySelector('.big-text').textContent = '💥 BUSTED';
+                overlayCrashed.querySelector('.big-text').style.color = '#ff6b6b';
+                crashedAt.textContent = 'Crashed at '+d.crash_point.toFixed(2)+'x';
+                crashPoint = d.crash_point; draw();
+            } else {
+                overlayCrashed.style.display = 'flex';
+                overlayCrashed.querySelector('.big-text').textContent = '💰 CASHED OUT';
+                overlayCrashed.querySelector('.big-text').style.color = '#4ade80';
+                crashedAt.textContent = 'At '+d.multiplier.toFixed(2)+'x — Won $'+d.winnings.toLocaleString();
+                profitDisplay.textContent = '$'+d.profit.toLocaleString();
+                profitDisplay.style.color = '#4ade80';
+            }
+            cashoutArea.style.display = 'none'; joined = false;
+        });
+    }
+
+    joinBtn.addEventListener('click', function(){
+        var bet = parseInt(document.getElementById('betInput').value);
+        if(isNaN(bet) || bet < 10000){ alert('Minimum bet is $10,000'); return; }
+        var fd = new FormData(); fd.append('bet', bet);
+        fetch('{{ url_for("crash_join") }}', {method:'POST', body:fd})
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            if(d.error){ alert(d.error); return; }
+            joined = true; betForm.style.display = 'none';
+            myBet.textContent = bet.toLocaleString();
+        });
+    });
+
+    cashoutBtn.addEventListener('click', cashOut);
+
+    poll();
+    pollTimer = setInterval(poll, 500);
+})();
+</script>
+{% endblock %}

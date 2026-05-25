@@ -51,7 +51,7 @@
     {% else %}
         <form method="POST">
             <label for="bet" style="font-weight:600;color:#aaa;display:block;margin-bottom:0.4rem;">Bet amount</label>
-            <input type="number" name="bet" id="bet" min="10" value="10" required>
+            <input type="number" name="bet" id="bet" min="10000" value="10000" step="1000" required>
             <label for="guess" style="font-weight:600;color:#aaa;display:block;margin-bottom:0.4rem;">Guess (2–12)</label>
             <input type="number" name="guess" id="guess" min="2" max="12" value="7" required>
             <button type="submit">Roll 🎲</button>

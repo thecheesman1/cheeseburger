@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="game-box" style="max-width:700px;">
+    <h2>🏪 Skin Marketplace</h2>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    <p style="color:#888;margin-bottom:1rem;">Buy skins from other players or <a href="{{ url_for('inventory') }}" style="color:#f0c040;">sell yours</a>.</p>
+
+    {% if listings %}
+    <div class="listing-list">
+        {% for l in listings %}
+        <div class="listing-row">
+            <div class="listing-skin">
+                <span class="skin-emoji">{{ l['skin']['emoji'] }}</span>
+                <div>
+                    <div class="skin-name">{{ l['skin']['name'] }}</div>
+                    <div class="skin-rarity" style="color:{{ rarity_colors[l['skin']['rarity']] }};">{{ l['skin']['rarity'] }}</div>
+                </div>
+            </div>
+            <div class="listing-info">
+                <div class="listing-price">${{ l['price']|int }}</div>
+                <div style="font-size:0.75rem;color:#666;">by {{ l['seller_name'] }}</div>
+            </div>
+            <div class="listing-actions">
+                {% if l['seller_id'] == user['id'] %}
+                <form method="POST" action="{{ url_for('market_cancel', listing_id=l['id']) }}">
+                    <button type="submit" style="background:#333;color:#ff6b6b;border:1px solid #ff6b6b40;padding:0.4rem 0.8rem;border-radius:6px;font-size:0.8rem;cursor:pointer;">Cancel</button>
+                </form>
+                {% else %}
+                <form method="POST" action="{{ url_for('market_buy', listing_id=l['id']) }}">
+                    <button type="submit" {% if user['balance'] < l['price'] %}disabled style="opacity:0.3;"{% endif %}
+                        style="background:#4ade8020;color:#4ade80;border:1px solid #4ade8040;padding:0.4rem 0.8rem;border-radius:6px;font-size:0.8rem;cursor:pointer;">
+                        {% if user['balance'] < l['price'] %}Can't Afford{% else %}Buy{% endif %}
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:3rem 1rem;color:#666;">
+        <div style="font-size:3rem;margin-bottom:1rem;">📭</div>
+        <p>No listings yet. Be the first to sell!</p>
+        <a href="{{ url_for('inventory') }}" class="btn" style="display:inline-block;width:auto;padding:0.5rem 1.5rem;text-decoration:none;margin-top:0.5rem;">Go to Inventory</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

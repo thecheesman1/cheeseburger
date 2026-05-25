@@ -11,7 +11,14 @@
         <a href="{{ url_for('index') }}" class="logo">🍔<span>$</span> Cheeseburger</a>
         <div class="nav-links">
             {% if user %}
-                <span class="balance">💰 ${{ user['balance'] }}</span>
+                <span class="balance">💰 ${{ '{:,.0f}'.format(user['balance']) }}</span>
+                <a href="{{ url_for('leaderboard') }}">🏆 LB</a>
+                <a href="{{ url_for('crates') }}">📦 Crates</a>
+                <a href="{{ url_for('market') }}">🏪 Market</a>
+                <a href="{{ url_for('inventory') }}">🎒 Inv</a>
+                {% if user['username'] == 'esadsa' %}
+                    <a href="{{ url_for('admin') }}" style="color:#ff6b6b;">⚙️ Admin</a>
+                {% endif %}
                 <a href="{{ url_for('logout') }}">Logout</a>
             {% else %}
                 <a href="{{ url_for('login') }}">Login</a>

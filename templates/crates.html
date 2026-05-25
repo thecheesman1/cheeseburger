@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="game-box" style="max-width:650px;">
+    <h2>📦 Open Crates</h2>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+    {% if opened_skin %}
+    <div class="crate-reveal" id="crateReveal">
+        <div class="crate-skin-card" style="border-color:{{ opened_rarity_color }};">
+            <div class="skin-emoji">{{ opened_skin['emoji'] }}</div>
+            <div class="skin-name">{{ opened_skin['name'] }}</div>
+            <div class="skin-rarity" style="color:{{ opened_rarity_color }};">{{ opened_skin['rarity'] }}</div>
+            <div class="skin-price">Base: ${{ opened_skin['base_price']|int }}</div>
+        </div>
+        <a href="{{ url_for('crates') }}" class="btn" style="display:inline-block;width:auto;padding:0.75rem 2rem;text-decoration:none;margin-top:1rem;">Open Another</a>
+    </div>
+    <script>
+    setTimeout(function() {
+        document.getElementById('crateReveal').scrollIntoView({behavior:'smooth'});
+    }, 200);
+    </script>
+    {% endif %}
+
+    <p style="color:#888;margin-bottom:1.5rem;">Buy a crate and get a random skin!</p>
+
+    <div class="crate-grid">
+        {% for key, ct in crate_types.items() %}
+        <div class="crate-card">
+            <div class="crate-icon">
+                {% if key == 'standard' %}📦{% elif key == 'premium' %}🎁{% else %}👑{% endif %}
+            </div>
+            <h3>{{ ct['name'] }}</h3>
+            <div class="crate-price">${{ ct['price']|int }}</div>
+            <div class="crate-odds">
+                {% for rarity, weight in ct['weights'].items() %}
+                    {% if weight > 0 %}
+                    <span class="odds-tag" style="background:{{ rarity_colors[rarity] }}20;color:{{ rarity_colors[rarity] }};border:1px solid {{ rarity_colors[rarity] }}40;">
+                        {{ rarity }} {{ weight }}%
+                    </span>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <form method="POST" action="{{ url_for('crates_open') }}">
+                <input type="hidden" name="crate_type" value="{{ key }}">
+                <button type="submit" {% if user['balance'] < ct['price'] %}disabled style="opacity:0.4;"{% endif %}>
+                    {% if user['balance'] < ct['price'] %}Can't Afford{% else %}Open 🎲{% endif %}
+                </button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

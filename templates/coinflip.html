@@ -44,7 +44,7 @@
     {% else %}
         <form method="POST">
             <label for="bet" style="font-weight:600;color:#aaa;display:block;margin-bottom:0.4rem;">Bet amount</label>
-            <input type="number" name="bet" id="bet" min="10" value="10" required>
+            <input type="number" name="bet" id="bet" min="10000" value="10000" step="1000" required>
             <div class="btn-group">
                 <button type="submit" name="call" value="heads" style="flex:1;">Heads</button>
                 <button type="submit" name="call" value="tails" style="flex:1;">Tails</button>

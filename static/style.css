@@ -16,6 +16,8 @@ nav {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 nav .logo {
@@ -28,15 +30,15 @@ nav .logo {
 
 nav .logo span { color: #ff6b6b; }
 
-nav .nav-links { display: flex; gap: 1rem; align-items: center; }
+nav .nav-links { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 
 nav .nav-links a, nav .nav-links button {
     color: #ccc;
     text-decoration: none;
-    padding: 0.5rem 1rem;
+    padding: 0.5rem 0.75rem;
     border-radius: 8px;
     font-weight: 600;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     transition: all 0.2s;
     border: none;
     cursor: pointer;
@@ -60,14 +62,14 @@ nav .balance {
 }
 
 .container {
-    max-width: 900px;
+    max-width: 960px;
     margin: 0 auto;
     padding: 2rem;
 }
 
 .hero {
     text-align: center;
-    padding: 4rem 1rem;
+    padding: 3rem 1rem;
 }
 
 .hero h1 {
@@ -86,9 +88,18 @@ nav .balance {
     margin-bottom: 2rem;
 }
 
+.bal-big {
+    color: #f0c040;
+    font-size: 1.3rem;
+    font-weight: 800;
+    background: rgba(240,192,64,0.1);
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+}
+
 .game-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 1.5rem;
     margin-top: 2rem;
 }
@@ -255,39 +266,21 @@ nav .balance {
     border-color: #f0c040;
 }
 
-.game-box .reel.spin-stop-1 {
-    animation: reelStop1 0.3s ease-out forwards;
-    border-color: #f0c040;
-}
-
-.game-box .reel.spin-stop-2 {
-    animation: reelStop2 0.3s ease-out forwards;
-    border-color: #f0c040;
-}
-
-.game-box .reel.spin-stop-3 {
-    animation: reelStop3 0.3s ease-out forwards;
-    border-color: #f0c040;
-}
+.game-box .reel.spin-stop-1 { animation: reelStop1 0.3s ease-out forwards; border-color: #f0c040; }
+.game-box .reel.spin-stop-2 { animation: reelStop2 0.3s ease-out forwards; border-color: #f0c040; }
+.game-box .reel.spin-stop-3 { animation: reelStop3 0.3s ease-out forwards; border-color: #f0c040; }
 
 .game-box .reel.win {
     border-color: #4ade80;
     box-shadow: 0 0 20px rgba(74, 222, 128, 0.3);
+    animation: winPulse 0.6s ease-in-out 3;
 }
 
-.game-box .reel .reel-inner {
-    display: inline-block;
-}
+.game-box .reel .reel-inner { display: inline-block; }
 
-.game-box .reel.spinning .reel-inner {
-    animation: symbolScroll 0.15s linear infinite;
-}
+.game-box .reel.spinning .reel-inner { animation: symbolScroll 0.15s linear infinite; }
 
-@keyframes reelSpin {
-    0% { transform: translateY(0); }
-    100% { transform: translateY(0); }
-}
-
+@keyframes reelSpin { 0% { transform: translateY(0); } 100% { transform: translateY(0); } }
 @keyframes symbolScroll {
     0% { transform: translateY(-20px); opacity: 0; }
     10% { transform: translateY(-10px); opacity: 0.3; }
@@ -295,196 +288,111 @@ nav .balance {
     90% { transform: translateY(10px); opacity: 0.3; }
     100% { transform: translateY(20px); opacity: 0; }
 }
+@keyframes reelStop1 { 0% { transform: scale(1.1); filter: blur(2px); } 100% { transform: scale(1); filter: blur(0); } }
+@keyframes reelStop2 { 0% { transform: scale(1.1); filter: blur(2px); } 100% { transform: scale(1); filter: blur(0); } }
+@keyframes reelStop3 { 0% { transform: scale(1.1); filter: blur(2px); } 100% { transform: scale(1); filter: blur(0); } }
+@keyframes winPulse { 0%,100% { box-shadow: 0 0 20px rgba(74, 222, 128, 0.3); } 50% { box-shadow: 0 0 40px rgba(74, 222, 128, 0.6); } }
 
-@keyframes reelStop1 {
-    0% { transform: scale(1.1); filter: blur(2px); }
-    100% { transform: scale(1); filter: blur(0); }
-}
-
-@keyframes reelStop2 {
-    0% { transform: scale(1.1); filter: blur(2px); }
-    100% { transform: scale(1); filter: blur(0); }
-}
-
-@keyframes reelStop3 {
-    0% { transform: scale(1.1); filter: blur(2px); }
-    100% { transform: scale(1); filter: blur(0); }
-}
-
-@keyframes winPulse {
-    0%, 100% { box-shadow: 0 0 20px rgba(74, 222, 128, 0.3); }
-    50% { box-shadow: 0 0 40px rgba(74, 222, 128, 0.6); }
-}
-
-.game-box .reel.win {
-    animation: winPulse 0.6s ease-in-out 3;
-}
-
-.game-box .coin {
-    font-size: 5rem;
-    margin: 1rem 0;
-    display: inline-block;
-    transition: transform 0.1s;
-}
-
-.game-box .coin.flipping {
-    animation: coinFlip 0.1s linear infinite;
-}
-
-.game-box .coin.landing {
-    animation: coinLand 0.4s ease-out forwards;
-}
+.game-box .coin { font-size: 5rem; margin: 1rem 0; display: inline-block; transition: transform 0.1s; }
+.game-box .coin.flipping { animation: coinFlip 0.1s linear infinite; }
+.game-box .coin.landing { animation: coinLand 0.4s ease-out forwards; }
+.game-box .coin.win-coin { animation: coinWin 0.6s ease-in-out 3; }
 
 @keyframes coinFlip {
-    0% { transform: rotateY(0deg) scale(1); }
-    25% { transform: rotateY(90deg) scale(0.9); }
-    50% { transform: rotateY(180deg) scale(1); }
-    75% { transform: rotateY(270deg) scale(0.9); }
+    0% { transform: rotateY(0deg) scale(1); } 25% { transform: rotateY(90deg) scale(0.9); }
+    50% { transform: rotateY(180deg) scale(1); } 75% { transform: rotateY(270deg) scale(0.9); }
     100% { transform: rotateY(360deg) scale(1); }
 }
-
 @keyframes coinLand {
     0% { transform: rotateY(720deg) scale(1.3); filter: brightness(1.5); }
-    50% { transform: rotateY(900deg) scale(0.8); }
-    100% { transform: rotateY(1080deg) scale(1); filter: brightness(1); }
+    50% { transform: rotateY(900deg) scale(0.8); } 100% { transform: rotateY(1080deg) scale(1); filter: brightness(1); }
 }
-
-.game-box .coin.win-coin {
-    animation: coinWin 0.6s ease-in-out 3;
-}
-
 @keyframes coinWin {
-    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 5px rgba(240, 192, 64, 0.3)); }
+    0%,100% { transform: scale(1); filter: drop-shadow(0 0 5px rgba(240, 192, 64, 0.3)); }
     50% { transform: scale(1.2); filter: drop-shadow(0 0 25px rgba(240, 192, 64, 0.8)); }
 }
 
-.game-box .dice-area {
-    font-size: 3rem;
-    margin: 1rem 0;
-    min-height: 80px;
-}
-
-.game-box .dice-area .die {
-    display: inline-block;
-    margin: 0 0.5rem;
-    transition: transform 0.1s;
-}
-
-.game-box .dice-area .die.rolling {
-    animation: diceRoll 0.1s linear infinite;
-}
-
-.game-box .dice-area .die.roll-stop {
-    animation: diceLand 0.4s ease-out forwards;
-}
+.game-box .dice-area { font-size: 3rem; margin: 1rem 0; min-height: 80px; }
+.game-box .dice-area .die { display: inline-block; margin: 0 0.5rem; transition: transform 0.1s; }
+.game-box .dice-area .die.rolling { animation: diceRoll 0.1s linear infinite; }
+.game-box .dice-area .die.roll-stop { animation: diceLand 0.4s ease-out forwards; }
+.game-box .dice-area .die.win-die { animation: diceWin 0.5s ease-in-out 3; }
 
 @keyframes diceRoll {
-    0% { transform: rotateX(0deg) rotateZ(0deg) scale(1); }
-    25% { transform: rotateX(90deg) rotateZ(45deg) scale(0.9); }
-    50% { transform: rotateX(180deg) rotateZ(90deg) scale(1); }
-    75% { transform: rotateX(270deg) rotateZ(135deg) scale(0.9); }
+    0% { transform: rotateX(0deg) rotateZ(0deg) scale(1); } 25% { transform: rotateX(90deg) rotateZ(45deg) scale(0.9); }
+    50% { transform: rotateX(180deg) rotateZ(90deg) scale(1); } 75% { transform: rotateX(270deg) rotateZ(135deg) scale(0.9); }
     100% { transform: rotateX(360deg) rotateZ(180deg) scale(1); }
 }
+@keyframes diceLand { 0% { transform: rotateX(720deg) rotateZ(360deg) scale(1.4); filter: brightness(1.5); } 100% { transform: rotateX(0deg) rotateZ(0deg) scale(1); filter: brightness(1); } }
+@keyframes diceWin { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
 
-@keyframes diceLand {
-    0% { transform: rotateX(720deg) rotateZ(360deg) scale(1.4); filter: brightness(1.5); }
-    100% { transform: rotateX(0deg) rotateZ(0deg) scale(1); filter: brightness(1); }
-}
-
-.game-box .dice-area .die.win-die {
-    animation: diceWin 0.5s ease-in-out 3;
-}
-
-@keyframes diceWin {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-15px); }
-}
-
-.game-box .result-line {
-    font-size: 1.2rem;
-    font-weight: 700;
-    margin: 1rem 0;
-    color: #f0c040;
-}
-
+.game-box .result-line { font-size: 1.2rem; font-weight: 700; margin: 1rem 0; color: #f0c040; }
 .game-box .net-positive { color: #4ade80; }
 .game-box .net-negative { color: #ff6b6b; }
 
 .game-box form input[type="number"] {
-    width: 100%;
-    padding: 0.75rem;
-    margin-bottom: 1rem;
-    background: #0a0a0f;
-    border: 1px solid #2a2a4a;
-    border-radius: 8px;
-    color: #fff;
-    font-size: 1rem;
-    font-family: 'Inter', sans-serif;
+    width: 100%; padding: 0.75rem; margin-bottom: 1rem;
+    background: #0a0a0f; border: 1px solid #2a2a4a; border-radius: 8px;
+    color: #fff; font-size: 1rem; font-family: 'Inter', sans-serif;
 }
+.game-box form input[type="number"]:focus { outline: none; border-color: #f0c040; }
 
-.game-box form input[type="number"]:focus {
-    outline: none;
-    border-color: #f0c040;
-}
+.game-box .btn-group { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.game-box .btn-group button { flex: 1; }
 
-.game-box .btn-group {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-}
-
-.game-box .btn-group button {
-    flex: 1;
-}
-
-.blackjack-hand {
-    margin: 1rem 0;
-}
-
-.blackjack-hand .cards {
-    font-size: 2rem;
-    letter-spacing: 0.3rem;
-}
-
-.blackjack-hand .label {
-    font-weight: 600;
-    color: #aaa;
-    margin-bottom: 0.3rem;
-}
-
-.blackjack-hand.dealing .card-slot {
-    display: inline-block;
-    opacity: 0;
-    transform: translateY(-30px) rotate(-10deg);
-    margin-right: 0.3rem;
-}
-
-.blackjack-hand.dealing .card-slot.dealt {
-    animation: cardDeal 0.3s ease-out forwards;
-}
-
+.blackjack-hand { margin: 1rem 0; }
+.blackjack-hand .cards { font-size: 2rem; letter-spacing: 0.3rem; }
+.blackjack-hand .label { font-weight: 600; color: #aaa; margin-bottom: 0.3rem; }
+.blackjack-hand.dealing .card-slot { display: inline-block; opacity: 0; transform: translateY(-30px) rotate(-10deg); margin-right: 0.3rem; }
+.blackjack-hand.dealing .card-slot.dealt { animation: cardDeal 0.3s ease-out forwards; }
 @keyframes cardDeal {
     0% { opacity: 0; transform: translateY(-30px) rotate(-10deg) scale(0.8); }
     60% { opacity: 1; transform: translateY(5px) rotate(3deg) scale(1.05); }
     100% { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
 }
+.blackjack-result-reveal { animation: resultFadeIn 0.4s ease-out forwards; opacity: 0; }
+@keyframes resultFadeIn { 0% { opacity: 0; transform: scale(0.8); } 100% { opacity: 1; transform: scale(1); } }
 
-.blackjack-hand.dealing .card-slot.dealer-face-down {
-    animation: dealerFaceDown 0.3s ease-out forwards;
+/* ── Crates ─────────────────────── */
+.crate-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-top: 1rem; }
+.crate-card {
+    background: #0a0a0f; border: 1px solid #2a2a4a; border-radius: 12px; padding: 1.5rem;
+    text-align: center; transition: all 0.2s;
+}
+.crate-card:hover { border-color: #f0c040; }
+.crate-card .crate-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+.crate-card h3 { color: #fff; font-size: 1rem; margin-bottom: 0.3rem; }
+.crate-card .crate-price { color: #f0c040; font-size: 1.2rem; font-weight: 700; margin-bottom: 0.5rem; }
+.crate-card .crate-odds { display: flex; flex-wrap: wrap; gap: 0.25rem; justify-content: center; margin-bottom: 0.75rem; }
+.odds-tag { font-size: 0.65rem; padding: 0.15rem 0.4rem; border-radius: 4px; font-weight: 600; }
+
+.crate-reveal { text-align: center; margin-bottom: 1.5rem; animation: resultFadeIn 0.5s ease-out; }
+.crate-skin-card {
+    display: inline-block; background: #0a0a0f; border: 2px solid; border-radius: 12px;
+    padding: 1.5rem 2rem; text-align: center;
 }
 
-@keyframes dealerFaceDown {
-    0% { opacity: 0; transform: translateY(-30px) rotate(-10deg) scale(0.8); }
-    60% { opacity: 1; transform: translateY(5px) rotate(3deg) scale(1.05); }
-    100% { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
-}
+/* ── Skins / Inventory / Market ─── */
+.skin-emoji { font-size: 2rem; }
+.skin-name { font-weight: 700; color: #fff; font-size: 0.9rem; }
+.skin-rarity { font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
+.skin-price { color: #888; font-size: 0.75rem; margin-top: 0.2rem; }
+.skin-qty { color: #f0c040; font-size: 0.8rem; font-weight: 700; margin-top: 0.2rem; }
 
-.blackjack-result-reveal {
-    animation: resultFadeIn 0.4s ease-out forwards;
-    opacity: 0;
+.inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem; }
+.inv-card {
+    background: #0a0a0f; border: 1px solid; border-radius: 10px;
+    padding: 1rem; text-align: center; transition: all 0.2s;
 }
+.inv-card:hover { transform: translateY(-2px); }
 
-@keyframes resultFadeIn {
-    0% { opacity: 0; transform: scale(0.8); }
-    100% { opacity: 1; transform: scale(1); }
+.listing-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.listing-row {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #0a0a0f; border: 1px solid #2a2a4a; border-radius: 10px;
+    padding: 0.75rem 1rem; gap: 0.75rem;
 }
+.listing-skin { display: flex; align-items: center; gap: 0.5rem; }
+.listing-info { text-align: right; }
+.listing-price { color: #f0c040; font-weight: 700; font-size: 1rem; }
+.listing-actions { flex-shrink: 0; }
