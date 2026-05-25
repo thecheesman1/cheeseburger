@@ -6,6 +6,7 @@ import bcrypt
 import threading
 import time as _time
 from flask import Flask, render_template, request, redirect, url_for, session, g, jsonify
+from bots import bot_thread, seed_bots, admin_settings, BOT_NAMES, roll_skin_from_crate
 
 app = Flask(__name__)
 app.secret_key = 'cheeseburger-secret-key-change-in-production'
@@ -46,204 +47,14 @@ CRATE_TYPES = {
 RARITY_RANK = {'Common': 0, 'Uncommon': 1, 'Rare': 2, 'Epic': 3, 'Legendary': 4}
 RARITY_COLORS = {'Common': '#9e9e9e', 'Uncommon': '#4ade80', 'Rare': '#60a5fa', 'Epic': '#c084fc', 'Legendary': '#fbbf24'}
 
-BOT_NAMES = ['BurgerKing', 'FryMaster', 'NuggetLord', 'ShakeWizard', 'GrillGod',
-             'PattyFlipper', 'SauceBoss', 'BunRunner', 'CheeseQueen', 'MeatMaverick']
 
-admin_settings = {
-    'crash_house_edge': 0.05,
-    'market_tax_pct': 0.05,
-    'bot_count': 10,
-    'bot_aggression': 'medium',
-    'min_bet': 10000,
-    'starting_balance': 20000,
-    'crate_discount_pct': 0,
-    'event_mode': 'normal',
-    'maintenance_mode': False,
-}
-
-def get_dynamic_price(skin, db_conn=None):
-    """Dynamic pricing based on supply/demand"""
-    base = skin['base_price']
-    if db_conn is None:
-        db_conn = sqlite3.connect(DATABASE)
-        close_after = True
-    else:
-        close_after = False
-
-    # Count how many exist in inventories
-    total = db_conn.execute(
-        'SELECT COALESCE(SUM(quantity), 0) FROM user_inventory WHERE skin_id = ?',
-        (skin['id'],)
-    ).fetchone()[0]
-    # Count market listings
-    listed = db_conn.execute(
-        'SELECT COUNT(*) FROM market_listings WHERE skin_id = ?',
-        (skin['id'],)
-    ).fetchone()[0]
-
-    rarity_mult = {'Common': 0.5, 'Uncommon': 1.0, 'Rare': 2.0, 'Epic': 4.0, 'Legendary': 8.0}[skin['rarity']]
-    scarcity = max(0.3, 1.0 - (total + listed) * 0.02)
-    demand_noise = random.uniform(0.85, 1.15)
-    price = int(base * rarity_mult * scarcity * demand_noise)
-    if close_after:
-        db_conn.close()
-    return max(base // 2, price)
-
-def roll_skin_from_crate(crate_type):
-    ct = CRATE_TYPES.get(crate_type)
-    if not ct:
-        return None
-    rarities = list(ct['weights'].keys())
-    weights = list(ct['weights'].values())
-    chosen_rarity = random.choices(rarities, weights=weights, k=1)[0]
-    pool = [s for s in SKIN_CATALOG if s['rarity'] == chosen_rarity]
-    return random.choice(pool) if pool else None
-
-def seed_bots():
-    db = sqlite3.connect(DATABASE)
-    for name in BOT_NAMES:
-        existing = db.execute('SELECT id FROM users WHERE username = ?', (name,)).fetchone()
-        if not existing:
-            pw = bcrypt.hashpw(('bot'+name).encode(), bcrypt.gensalt())
-            bal = STARTING_BALANCE + random.randint(5000, 100000)
-            db.execute('INSERT INTO users (username, password, balance, is_bot) VALUES (?, ?, ?, 1)',
-                       (name, pw, bal))
-            # Give them some skins
-            user_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
-            for _ in range(random.randint(3, 12)):
-                skin = roll_skin_from_crate(random.choice(list(CRATE_TYPES.keys())))
-                if skin:
-                    add_skin_to_user_raw(db, user_id, skin['id'])
-    db.commit()
-    db.close()
-
-def add_skin_to_user_raw(db, user_id, skin_id):
-    db.row_factory = sqlite3.Row
-    existing = db.execute('SELECT id, quantity FROM user_inventory WHERE user_id = ? AND skin_id = ?',
-                          (user_id, skin_id)).fetchone()
-    if existing:
-        db.execute('UPDATE user_inventory SET quantity = quantity + 1 WHERE id = ?', (existing['id'],))
-    else:
-        db.execute('INSERT INTO user_inventory (user_id, skin_id, quantity) VALUES (?, ?, 1)', (user_id, skin_id))
-
-def bot_thread():
-    """Background thread: bots play crash, open crates, trade market"""
-    while True:
-        try:
-            db = sqlite3.connect(DATABASE)
-            db.row_factory = sqlite3.Row
-            bots = db.execute("SELECT id, username, balance FROM users WHERE is_bot = 1").fetchall()
-            if not bots:
-                db.close()
-                _time.sleep(5)
-                continue
-
-            room = _crash_room
-            for bot in bots:
-                if room['phase'] == 'betting' and random.random() < 0.6:
-                    uid = str(bot['id'])
-                    pending = room.get('_pending', {})
-                    if uid not in pending and uid not in room.get('players', {}):
-                        max_bet = min(bot['balance'] // 4, 50000)
-                        if max_bet >= MIN_BET:
-                            bet = random.randint(MIN_BET, max_bet)
-                            db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (bet, bot['id']))
-                            db.commit()
-                            if '_pending' not in room:
-                                room['_pending'] = {}
-                            room['_pending'][uid] = {'username': bot['username'], 'bet': bet,
-                                                      'cashed_out_at': None, 'busted': False}
-
-                elif room['phase'] == 'running':
-                    uid = str(bot['id'])
-                    player = room['players'].get(uid)
-                    if player and player.get('cashed_out_at') is None and not player.get('busted'):
-                        # Smart cashout: bots try to cash out at 1.5x-3x depending on aggression
-                        mult = _get_multiplier()
-                        target = random.uniform(1.3, 3.5)
-                        if mult >= target:
-                            player['cashed_out_at'] = mult
-                            winnings = int(player['bet'] * mult)
-                            db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (winnings, bot['id']))
-                            db.commit()
-
-            # Bot market activity
-            if random.random() < 0.6:
-                _bot_market_activity(db)
-
-            # Bot crate opening
-            if random.random() < 0.5:
-                _bot_open_crates(db)
-
-            db.close()
-        except:
-            pass
-        _time.sleep(random.uniform(1, 3))
-
-def _bot_market_activity(db):
-    """Bots list items and buy from market"""
-    db.row_factory = sqlite3.Row
-    bots = db.execute("SELECT id, username, balance FROM users WHERE is_bot = 1").fetchall()
-    for bot in bots:
-        if random.random() < 0.3:
-            # List a skin for sale
-            inv = db.execute(
-                'SELECT ui.skin_id, ui.quantity FROM user_inventory ui WHERE ui.user_id = ? ORDER BY RANDOM() LIMIT 1',
-                (bot['id'],)
-            ).fetchone()
-            if inv and inv['quantity'] > 0:
-                skin = get_skin(inv['skin_id'])
-                if skin:
-                    price = get_dynamic_price(skin, db)
-                    price = int(price * random.uniform(0.8, 1.5))
-                    existing = db.execute('SELECT id FROM market_listings WHERE seller_id = ? AND skin_id = ?',
-                                          (bot['id'], inv['skin_id'])).fetchone()
-                    if not existing:
-                        remove_skin_from_user_raw(db, bot['id'], inv['skin_id'])
-                        db.execute('INSERT INTO market_listings (seller_id, skin_id, price) VALUES (?, ?, ?)',
-                                   (bot['id'], inv['skin_id'], price))
-                        db.commit()
-        if random.random() < 0.3:
-            # Buy from market if they have money
-            if bot['balance'] > 50000:
-                listing = db.execute(
-                    'SELECT ml.* FROM market_listings ml WHERE ml.seller_id != ? ORDER BY ml.price ASC LIMIT 1',
-                    (bot['id'],)
-                ).fetchone()
-                if listing and listing['price'] <= bot['balance']:
-                    db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (listing['price'], bot['id']))
-                    db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (listing['price'], listing['seller_id']))
-                    db.execute('DELETE FROM market_listings WHERE id = ?', (listing['id'],))
-                    add_skin_to_user_raw(db, bot['id'], listing['skin_id'])
-                    db.commit()
-
-def _bot_open_crates(db):
-    """Bots occasionally open crates"""
-    db.row_factory = sqlite3.Row
-    bots = db.execute("SELECT id, balance FROM users WHERE is_bot = 1").fetchall()
-    for bot in bots:
-        if random.random() < 0.4:
-            affordable = [k for k, v in CRATE_TYPES.items() if v['price'] <= bot['balance']]
-            if affordable:
-                ct_key = random.choice(affordable)
-                ct = CRATE_TYPES[ct_key]
-                skin = roll_skin_from_crate(ct_key)
-                if skin:
-                    db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (ct['price'], bot['id']))
-                    add_skin_to_user_raw(db, bot['id'], skin['id'])
-                    db.commit()
-
-def remove_skin_from_user_raw(db, user_id, skin_id):
-    db.row_factory = sqlite3.Row
-    row = db.execute('SELECT id, quantity FROM user_inventory WHERE user_id = ? AND skin_id = ?',
-                     (user_id, skin_id)).fetchone()
-    if not row:
-        return False
-    if row['quantity'] > 1:
-        db.execute('UPDATE user_inventory SET quantity = quantity - 1 WHERE id = ?', (row['id'],))
-    else:
-        db.execute('DELETE FROM user_inventory WHERE id = ?', (row['id'],))
-    return True
+# Wire bots.py to our globals
+import bots as botmod
+botmod.DATABASE = DATABASE
+botmod.CRATE_TYPES = CRATE_TYPES
+botmod.SKIN_CATALOG = SKIN_CATALOG
+botmod.MIN_BET = MIN_BET
+botmod.STARTING_BALANCE = STARTING_BALANCE
 
 def get_db():
     if 'db' not in g:
@@ -293,11 +104,6 @@ def init_db():
 
 init_db()
 
-# Seed bots and start background thread
-seed_bots()
-_bot_thread = threading.Thread(target=bot_thread, daemon=True)
-_bot_thread.start()
-
 def login_required(f):
     from functools import wraps
     @wraps(f)
@@ -318,6 +124,38 @@ def get_skin(skin_id):
         if s['id'] == skin_id:
             return s
     return None
+
+def get_dynamic_price(skin, db_conn=None):
+    """Dynamic pricing based on supply/demand"""
+    base = skin['base_price']
+    own_db = db_conn is None
+    if own_db:
+        db_conn = sqlite3.connect(DATABASE)
+    total = db_conn.execute(
+        'SELECT COALESCE(SUM(quantity), 0) FROM user_inventory WHERE skin_id = ?',
+        (skin['id'],)
+    ).fetchone()[0]
+    listed = db_conn.execute(
+        'SELECT COUNT(*) FROM market_listings WHERE skin_id = ?',
+        (skin['id'],)
+    ).fetchone()[0]
+    rarity_mult = {'Common': 0.5, 'Uncommon': 1.0, 'Rare': 2.0, 'Epic': 4.0, 'Legendary': 8.0}[skin['rarity']]
+    scarcity = max(0.3, 1.0 - (total + listed) * 0.02)
+    demand_noise = random.uniform(0.85, 1.15)
+    price = int(base * rarity_mult * scarcity * demand_noise)
+    if own_db:
+        db_conn.close()
+    return max(base // 2, price)
+
+def roll_skin_from_crate(crate_type):
+    ct = CRATE_TYPES.get(crate_type)
+    if not ct:
+        return None
+    rarities = list(ct['weights'].keys())
+    weights = list(ct['weights'].values())
+    chosen_rarity = random.choices(rarities, weights=weights, k=1)[0]
+    pool = [s for s in SKIN_CATALOG if s['rarity'] == chosen_rarity]
+    return random.choice(pool) if pool else None
 
 def get_user_inventory(user_id):
     db = get_db()
@@ -939,5 +777,36 @@ def admin():
                           bots=bots, total_users=total_users, total_listings=total_market,
                           top_humans=top_human, room=_crash_room)
 
+
+# ── Bot wiring + startup ─────────────────────────────────────────
+# Called at module import to wire bots.py to app globals
+
+import bots as _b
+_b._crash_room = _crash_room
+_b._get_multiplier = _get_multiplier
+_b.get_skin = get_skin
+_b.get_dynamic_price = get_dynamic_price
+_b.roll_skin_from_crate = roll_skin_from_crate
+
+# Provide raw inventory helpers
+def _add_raw(db, uid, sid):
+    db.row_factory = sqlite3.Row
+    e = db.execute('SELECT id, quantity FROM user_inventory WHERE user_id=? AND skin_id=?', (uid, sid)).fetchone()
+    if e: db.execute('UPDATE user_inventory SET quantity=quantity+1 WHERE id=?', (e['id'],))
+    else: db.execute('INSERT INTO user_inventory (user_id,skin_id,quantity) VALUES (?,?,1)', (uid, sid))
+def _rem_raw(db, uid, sid):
+    db.row_factory = sqlite3.Row
+    r = db.execute('SELECT id, quantity FROM user_inventory WHERE user_id=? AND skin_id=?', (uid, sid)).fetchone()
+    if not r: return False
+    if r['quantity'] > 1: db.execute('UPDATE user_inventory SET quantity=quantity-1 WHERE id=?', (r['id'],))
+    else: db.execute('DELETE FROM user_inventory WHERE id=?', (r['id'],))
+    db.commit(); return True
+_b.add_skin_to_user_raw = _add_raw
+_b.remove_skin_from_user_raw = _rem_raw
+
+seed_bots()
+threading.Thread(target=bot_thread, daemon=True).start()
+
 if __name__ == '__main__':
+
     app.run(debug=False, host='0.0.0.0', port=34797)
