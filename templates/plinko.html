@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="game-box">
+<h2>🟢 Plinko</h2>
+{% if result.slot is not none %}
+<div class="bet-result {{ 'win' if result.win else 'loss' }}">
+  <div class="plinko-result">Slot <b>#{{ result.slot }}</b> → {{ result.payout }} coins ({{ result.risk }} risk)</div>
+</div>
+{% endif %}
+<form method="POST">
+  <label>Bet Amount</label>
+  <input type="number" name="bet_amount" value="{{ MIN_BET }}" min="{{ MIN_BET }}" max="{{ user.balance }}" step="1000" required>
+  <label>Risk</label>
+  <select name="risk" class="bet-select">
+    <option value="low">🟢 Low (0.5x – 3x)</option>
+    <option value="medium" selected>🟡 Medium (0.5x – 13x)</option>
+    <option value="high">🔴 High (0.2x – 55x)</option>
+  </select>
+  <button type="submit" class="btn spin-btn">⬇️ Drop</button>
+</form>
+<div class="plinko-board">
+  {% for i in range(10) %}<div class="plinko-slot">{{ ['0.5x','1x','1.5x','2x','3x','3x','2x','1.5x','1x','0.5x'][i] }}</div>{% endfor %}
+</div>
+</div>
+<style>.plinko-board{display:flex;gap:4px;margin-top:12px;justify-content:center}.plinko-slot{background:#1a1a28;padding:6px 10px;border-radius:4px;font-size:.75rem;border:1px solid #2a2a3a}.plinko-result{font-size:1.2rem;padding:12px}</style>
+{% endblock %}

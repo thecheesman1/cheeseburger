@@ -1,84 +1,130 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
-.admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem;margin-top:1rem}
-.admin-card{background:#0a0a0f;border:1px solid #2a2a4a;border-radius:12px;padding:1.5rem}
-.admin-card h3{color:#f0c040;margin-bottom:1rem;font-size:1.1rem}
-.admin-card label{display:block;color:#aaa;font-size:0.8rem;margin-bottom:0.3rem;font-weight:600}
-.admin-card input,.admin-card select{width:100%;padding:0.6rem;margin-bottom:0.75rem;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;color:#fff;font-size:0.9rem;font-family:'Inter',sans-serif}
+.admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-top:1rem}
+.admin-card{background:#0a0a0f;border:1px solid #2a2a4a;border-radius:12px;padding:1.2rem}
+.admin-card h3{color:#f0c040;margin-bottom:0.8rem;font-size:1rem}
+.admin-card label{display:block;color:#aaa;font-size:0.78rem;margin-bottom:0.2rem;font-weight:600}
+.admin-card input,.admin-card select{width:100%;padding:0.5rem;margin-bottom:0.6rem;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:6px;color:#fff;font-size:0.85rem;font-family:'Inter',sans-serif;box-sizing:border-box}
 .admin-card input:focus,.admin-card select:focus{outline:none;border-color:#f0c040}
-.admin-card .btn-sm{padding:0.4rem 1rem;font-size:0.85rem;border-radius:6px;border:none;cursor:pointer;font-weight:600;font-family:'Inter',sans-serif;width:auto}
+.admin-card .btn-sm{padding:0.35rem 0.8rem;font-size:0.8rem;border-radius:6px;border:none;cursor:pointer;font-weight:600;font-family:'Inter',sans-serif}
 .btn-danger{background:#ff6b6b;color:#fff}
 .btn-warn{background:#f0c040;color:#1a1a2e}
 .btn-safe{background:#4ade80;color:#1a1a2e}
 .btn-info{background:#60a5fa;color:#1a1a2e}
-.stat-row{display:flex;justify-content:space-between;padding:0.3rem 0;border-bottom:1px solid #1a1a2e;font-size:0.85rem}
+.btn-purple{background:#c084fc;color:#1a1a2e}
+.stat-row{display:flex;justify-content:space-between;padding:0.25rem 0;border-bottom:1px solid #1a1a2e;font-size:0.8rem}
 .stat-row .stat-val{color:#f0c040;font-weight:600}
+.stat-row .stat-red{color:#ff6b6b;font-weight:600}
+.stat-row .stat-green{color:#4ade80;font-weight:600}
 .bot-list{max-height:250px;overflow-y:auto}
-.bot-list .bot-row{display:flex;justify-content:space-between;padding:0.3rem 0;border-bottom:1px solid #1a1a2e;font-size:0.8rem}
-.bot-list .bot-name{color:#fff;font-weight:600}
-.bot-list .bot-bal{color:#4ade80;font-weight:700}
+.bot-list .bot-row{display:flex;justify-content:space-between;align-items:center;padding:0.25rem 0;border-bottom:1px solid #1a1a2e;font-size:0.78rem}
+.bot-list .bot-name{color:#fff;font-weight:600;min-width:100px}
+.bot-list .bot-bal{color:#4ade80;font-weight:700;min-width:70px;text-align:right}
+.audit-list{max-height:200px;overflow-y:auto;font-size:0.72rem}
+.audit-row{padding:3px 0;border-bottom:1px solid #0f0f18}
+.audit-row .act{color:#f0c040;font-weight:600}
+.audit-row .det{color:#888}
+.audit-row .ts{color:#555}
+.game-stat-row{display:flex;justify-content:space-between;font-size:0.75rem;padding:2px 0}
+.game-stat-row .gs-name{width:100px;font-weight:600}
+.game-stat-row .gs-plays{width:50px;text-align:right;color:#aaa}
+.game-stat-row .gs-profit{width:90px;text-align:right}
+.big-stat{font-size:1.6rem;font-weight:900;text-align:center}
+.big-stat.green{color:#4ade80}
+.big-stat.red{color:#ff6b6b}
+.big-stat.gold{color:#f0c040}
+.divider{border-top:1px solid #2a2a4a;margin:0.8rem 0}
 </style>
 
-<div class="game-box" style="max-width:900px">
+<div class="game-box" style="max-width:1100px">
     <h2>⚙️ Admin Panel</h2>
-    <p style="color:#888;margin-bottom:0.5rem;">Welcome, {{ user['username'] }} — you have unlimited power.</p>
+    <p style="color:#888;margin-bottom:0.5rem">Welcome, {{ user['username'] }} — full control.</p>
 
     <div class="admin-grid">
+        <!-- Economy Overview -->
+        <div class="admin-card">
+            <h3>📊 Economy Overview</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+                <div style="text-align:center"><div class="big-stat gold">{{ total_users }}</div><small style="color:#888">Users</small></div>
+                <div style="text-align:center"><div class="big-stat green">${{ '{:,.0f}'.format(wagered) }}</div><small style="color:#888">Wagered</small></div>
+                <div style="text-align:center"><div class="big-stat">${{ '{:,.0f}'.format(paid) }}</div><small style="color:#888">Paid Out</small></div>
+                <div style="text-align:center"><div class="big-stat {{ 'green' if house_profit >= 0 else 'red' }}">${{ '{:,.0f}'.format(house_profit) }}</div><small style="color:#888">House Profit</small></div>
+            </div>
+            <div class="divider"></div>
+            <div class="stat-row"><span>Market Listings</span><span class="stat-val">{{ total_listings }}</span></div>
+            <div class="stat-row"><span>Inventory Items</span><span class="stat-val">{{ total_inventory }}</span></div>
+            <div class="stat-row"><span>Chat Messages</span><span class="stat-val">{{ total_chat }}</span></div>
+            <div class="stat-row"><span>Active (1hr)</span><span class="stat-val">{{ active_now }}</span></div>
+            <div class="stat-row"><span>Crash Round</span><span class="stat-val">#{{ room['round'] }} ({{ room['phase'] }})</span></div>
+            <div class="stat-row"><span>Next Crash</span><span class="stat-red">{{ room.get('crash_point', '?') }}x</span></div>
+        </div>
+
+        <!-- Game Stats -->
+        <div class="admin-card">
+            <h3>🎮 Game Stats</h3>
+            {% if game_stats %}
+            {% for g in game_stats %}
+            {% set gprofit = g['wagered'] - g['won'] %}
+            <div class="game-stat-row">
+                <span class="gs-name">{{ g['game'] }}</span>
+                <span class="gs-plays">{{ g['plays'] }}</span>
+                <span class="gs-profit {{ 'stat-green' if gprofit >= 0 else 'stat-red' }}">${{ '{:,.0f}'.format(gprofit) }}</span>
+            </div>
+            {% endfor %}
+            {% else %}
+            <p style="color:#888;font-size:0.8rem">No bets tracked yet. Play games to populate.</p>
+            {% endif %}
+        </div>
+
         <!-- Settings -->
         <div class="admin-card">
-            <h3>🌍 Global Settings</h3>
+            <h3>🌍 Settings</h3>
             <form method="POST">
                 <input type="hidden" name="action" value="save_settings">
-                <label>Min Bet</label>
-                <input type="number" name="min_bet" value="{{ settings['min_bet'] }}">
-                <label>Starting Balance</label>
-                <input type="number" name="starting_balance" value="{{ settings['starting_balance'] }}">
+                <label>Min Bet</label><input type="number" name="min_bet" value="{{ settings['min_bet'] }}">
+                <label>Starting Balance</label><input type="number" name="starting_balance" value="{{ settings['starting_balance'] }}">
                 <label>Bot Aggression</label>
                 <select name="bot_aggression">
                     <option value="low" {% if settings['bot_aggression']=='low' %}selected{% endif %}>Low</option>
                     <option value="medium" {% if settings['bot_aggression']=='medium' %}selected{% endif %}>Medium</option>
                     <option value="high" {% if settings['bot_aggression']=='high' %}selected{% endif %}>High</option>
                 </select>
-                <label>Crate Discount (%)</label>
-                <input type="number" name="crate_discount" value="{{ settings['crate_discount_pct'] }}" min="0" max="90">
+                <label>Crate Discount (%)</label><input type="number" name="crate_discount" value="{{ settings['crate_discount_pct'] }}" min="0" max="90">
                 <label>Event Mode</label>
                 <select name="event_mode">
                     <option value="normal" {% if settings['event_mode']=='normal' %}selected{% endif %}>Normal</option>
-                    <option value="double_crash" {% if settings['event_mode']=='double_crash' %}selected{% endif %}>Double Crash Multipliers</option>
-                    <option value="lucky_hour" {% if settings['event_mode']=='lucky_hour' %}selected{% endif %}>Lucky Hour (2x crate chance)</option>
-                    <option value="apeshit" {% if settings['event_mode']=='apeshit' %}selected{% endif %}>Apeshit (chaos mode)</option>
+                    <option value="double_crash" {% if settings['event_mode']=='double_crash' %}selected{% endif %}>Double Crash</option>
+                    <option value="lucky_hour" {% if settings['event_mode']=='lucky_hour' %}selected{% endif %}>Lucky Hour</option>
+                    <option value="apeshit" {% if settings['event_mode']=='apeshit' %}selected{% endif %}>Apeshit</option>
                 </select>
-                <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer">
-                    <input type="checkbox" name="maintenance_mode" style="width:auto" {% if settings['maintenance_mode'] %}checked{% endif %}>
-                    Maintenance Mode
-                </label>
-                <button type="submit" class="btn-sm btn-warn" style="margin-top:0.75rem;width:100%">Save Settings</button>
+                <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer"><input type="checkbox" name="maintenance_mode" style="width:auto" {% if settings['maintenance_mode'] %}checked{% endif %}>Maintenance Mode</label>
+                <button type="submit" class="btn-sm btn-warn" style="margin-top:0.6rem;width:100%">Save</button>
             </form>
         </div>
 
-        <!-- Give Money -->
+        <!-- User Actions -->
         <div class="admin-card">
-            <h3>💰 Give Money</h3>
-            <form method="POST">
+            <h3>👤 User Actions</h3>
+            <form method="POST" style="margin-bottom:0.8rem">
                 <input type="hidden" name="action" value="give_money">
-                <label>Username</label>
-                <input type="text" name="username" placeholder="player name" required>
-                <label>Amount</label>
-                <input type="number" name="amount" value="10000" min="1" required>
-                <button type="submit" class="btn-sm btn-safe" style="width:100%">Give Money (doubled to you)</button>
+                <label>Username</label><input type="text" name="username" placeholder="player" required>
+                <label>Amount</label><input type="number" name="amount" value="50000" min="1">
+                <button type="submit" class="btn-sm btn-safe" style="width:100%">💰 Give Money</button>
             </form>
-        </div>
-
-        <!-- Stats -->
-        <div class="admin-card">
-            <h3>📊 Server Stats</h3>
-            <div class="stat-row"><span>Total Users</span><span class="stat-val">{{ total_users }}</span></div>
-            <div class="stat-row"><span>Market Listings</span><span class="stat-val">{{ total_listings }}</span></div>
-            <div class="stat-row"><span>Crash Round</span><span class="stat-val">#{{ room['round'] }}</span></div>
-            <div class="stat-row"><span>Crash Phase</span><span class="stat-val">{{ room['phase'] }}</span></div>
-            <div class="stat-row"><span>Next Crash Point</span><span class="stat-val" style="color:#ff6b6b">{{ room.get('crash_point', '?') }}x</span></div>
-            <h3 style="margin-top:1rem;">👤 Top Humans</h3>
+            <form method="POST" style="margin-bottom:0.8rem">
+                <input type="hidden" name="action" value="set_balance">
+                <label>Username</label><input type="text" name="username" placeholder="player" required>
+                <label>Set Balance To</label><input type="number" name="amount" value="20000" min="0">
+                <button type="submit" class="btn-sm btn-purple" style="width:100%">🔢 Set Balance</button>
+            </form>
+            <form method="POST">
+                <input type="hidden" name="action" value="ban_user">
+                <label>Username to Ban</label><input type="text" name="username" placeholder="player" required>
+                <button type="submit" class="btn-sm btn-danger" style="width:100%" onclick="return confirm('Ban and delete ALL data for this user?')">🚫 Ban User</button>
+            </form>
+            <div class="divider"></div>
+            <h3>👤 Top Humans</h3>
             {% for h in top_humans %}
             <div class="stat-row"><span>{{ h['username'] }}</span><span class="stat-val">${{ '{:,.0f}'.format(h['balance']) }}</span></div>
             {% endfor %}
@@ -86,18 +132,44 @@
 
         <!-- Bots -->
         <div class="admin-card">
-            <h3>🤖 Bots</h3>
+            <h3>🤖 Bot Control</h3>
+            <form method="POST" style="margin-bottom:0.5rem">
+                <input type="hidden" name="action" value="toggle_bots">
+                <button type="submit" class="btn-sm {{ 'btn-safe' if settings.get('bots_enabled', True) else 'btn-danger' }}" style="width:100%">
+                    {{ '🤖 Bots: ON (click to disable)' if settings.get('bots_enabled', True) else '⚠ Bots: OFF (click to enable)' }}
+                </button>
+            </form>
+            <form method="POST" style="margin-bottom:0.8rem">
+                <input type="hidden" name="action" value="force_crash">
+                <label>Crash At</label><input type="number" name="crash_at" value="1.01" min="1.01" max="100" step="0.01">
+                <button type="submit" class="btn-sm btn-danger" style="width:100%">💥 Force Crash</button>
+            </form>
             <div class="bot-list">
                 {% for b in bots %}
                 <div class="bot-row">
                     <span class="bot-name">{{ b['username'] }}</span>
                     <span class="bot-bal">${{ '{:,.0f}'.format(b['balance']) }}</span>
                     <form method="POST" style="display:inline">
-                        <input type="hidden" name="action" value="reset_bot">
-                        <input type="hidden" name="username" value="{{ b['username'] }}">
-                        <button type="submit" class="btn-sm btn-info" style="font-size:0.7rem;padding:0.2rem 0.5rem">Reset</button>
+                        <input type="hidden" name="action" value="reset_bot"><input type="hidden" name="username" value="{{ b['username'] }}">
+                        <button type="submit" class="btn-sm btn-info" style="font-size:0.65rem;padding:0.15rem 0.4rem">Reset</button>
                     </form>
                 </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Audit Trail -->
+        <div class="admin-card">
+            <h3>📋 Audit Trail</h3>
+            <div class="audit-list">
+                {% for a in audit_trail %}
+                <div class="audit-row">
+                    <span class="act">{{ a['action'] }}</span>
+                    {% if a['detail'] %}<span class="det">({{ a['detail'] }})</span>{% endif %}
+                    <span class="ts" style="float:right">{{ a['created_at']|default(0)|int }}</span>
+                </div>
+                {% else %}
+                <p style="color:#888;font-size:0.8rem">No admin actions logged yet.</p>
                 {% endfor %}
             </div>
         </div>
@@ -105,13 +177,17 @@
         <!-- Danger Zone -->
         <div class="admin-card" style="border-color:#ff6b6b40">
             <h3 style="color:#ff6b6b">⚠️ Danger Zone</h3>
-            <form method="POST" style="margin-bottom:0.5rem">
+            <form method="POST" style="margin-bottom:0.4rem">
                 <input type="hidden" name="action" value="wipe_economy">
-                <button type="submit" class="btn-sm btn-danger" style="width:100%" onclick="return confirm('Wipe all player money and inventories? This cannot be undone.')">Wipe Economy (Reset Players)</button>
+                <button type="submit" class="btn-sm btn-danger" style="width:100%" onclick="return confirm('Reset all player money and inventories?')">Wipe Economy</button>
+            </form>
+            <form method="POST" style="margin-bottom:0.4rem">
+                <input type="hidden" name="action" value="wipe_chat">
+                <button type="submit" class="btn-sm btn-warn" style="width:100%" onclick="return confirm('Delete all chat messages?')">🧹 Wipe Chat</button>
             </form>
             <form method="POST">
                 <input type="hidden" name="action" value="nuke">
-                <button type="submit" class="btn-sm btn-danger" style="width:100%;background:#7f0000" onclick="return confirm('DELETE ALL USERS except esadsa? This is irreversible.')">💀 NUKE EVERYTHING</button>
+                <button type="submit" class="btn-sm btn-danger" style="width:100%;background:#7f0000" onclick="return confirm('DELETE ALL USERS except esadsa? IRREVERSIBLE.')">💀 NUKE EVERYTHING</button>
             </form>
         </div>
     </div>

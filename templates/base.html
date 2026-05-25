@@ -52,6 +52,22 @@
         @media (max-width: 768px) {
             .chat-sidebar { display: none; }
         }
+        /* Games dropdown */
+        .games-drop { cursor: pointer; position: relative; }
+        .games-menu {
+            display: none; position: absolute; top: 100%; left: 0;
+            background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 8px;
+            min-width: 180px; z-index: 1000; padding: 0.4rem 0;
+            flex-direction: column;
+        }
+        .games-drop:hover + .games-menu,
+        .games-menu:hover { display: flex; }
+        .games-menu a {
+            padding: 0.4rem 1rem; font-size: 0.82rem; color: #ccc;
+            text-decoration: none; white-space: nowrap;
+        }
+        .games-menu a:hover { color: #ffd700; background: #2a2a3a; }
+        nav { position: relative; z-index: 1001; }
     </style>
 </head>
 <body>
@@ -64,6 +80,24 @@
                 <a href="{{ url_for('crates') }}">📦 Crates</a>
                 <a href="{{ url_for('market') }}">🏪 Market</a>
                 <a href="{{ url_for('inventory') }}">🎒 Inv</a>
+                <a href="#" class="games-drop">🎮 Games ▾</a>
+                <div class="games-menu">
+                    <a href="{{ url_for('crash') }}">🚀 Crash</a>
+                    <a href="{{ url_for('slots') }}">🎰 Slots</a>
+                    <a href="{{ url_for('blackjack') }}">🃏 Blackjack</a>
+                    <a href="{{ url_for('coinflip') }}">🪙 Coin Flip</a>
+                    <a href="{{ url_for('dice') }}">🎲 Dice</a>
+                    <a href="{{ url_for('roulette') }}">🎡 Roulette</a>
+                    <a href="{{ url_for('keno') }}">🔢 Keno</a>
+                    <a href="{{ url_for('plinko') }}">🟢 Plinko</a>
+                    <a href="{{ url_for('mines') }}">💣 Mines</a>
+                    <a href="{{ url_for('wheel') }}">🎡 Wheel</a>
+                    <a href="{{ url_for('hilo') }}">🃏 Hi-Lo</a>
+                    <a href="{{ url_for('limbo') }}">🚀 Limbo</a>
+                    <a href="{{ url_for('baccarat') }}">🃏 Baccarat</a>
+                    <a href="{{ url_for('scratchcard') }}">🟨 Scratchcard</a>
+                    <a href="{{ url_for('tower') }}">🗼 Tower</a>
+                </div>
                 {% if user['username'] == 'esadsa' %}
                     <a href="{{ url_for('admin') }}" style="color:#ff6b6b;">⚙️ Admin</a>
                 {% endif %}

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="game-box">
+<h2>🗼 Tower</h2>
+{% if result.bust %}
+<div class="bet-result loss"><p>💥 Tower collapsed at level {{ result.levels }}!</p></div>
+{% elif result.cashed_out %}
+<div class="bet-result win"><p>💰 Cashed out at level {{ result.levels }}! ${{ '{:,.0f}'.format(result.payout) }} coins</p></div>
+{% endif %}
+{% if not result.playing %}
+<form method="POST">
+  <input type="hidden" name="action" value="start">
+  <label>Bet Amount</label>
+  <input type="number" name="bet_amount" value="{{ MIN_BET }}" min="{{ MIN_BET }}" max="{{ user.balance }}" step="1000" required>
+  <label>Difficulty</label>
+  <select name="difficulty" class="bet-select">
+    <option value="easy">Easy (10% fail)</option>
+    <option value="medium" selected>Medium (25% fail)</option>
+    <option value="hard">Hard (40% fail)</option>
+  </select>
+  <button type="submit" class="btn spin-btn">▶️ Start</button>
+</form>
+<p class="hint" style="text-align:center">Each level multiplies by 1.5x. Cash out anytime!</p>
+{% else %}
+<div class="tower-display">
+  <div class="tower-levels">{% for i in range(result.levels) %}<div class="level filled">🏗️</div>{% endfor %}<div class="level">⬆️</div></div>
+  <p style="font-size:1.5rem;color:#ffd700;text-align:center">Level {{ result.levels }} — ${{ '{:,.0f}'.format(result.payout) }} coins</p>
+</div>
+<div style="display:flex;gap:8px">
+  <form method="POST" style="flex:1">
+    <input type="hidden" name="action" value="climb">
+    <input type="hidden" name="bet_amount" value="{{ result.bet_amount }}">
+    <input type="hidden" name="levels" value="{{ result.levels }}">
+    <input type="hidden" name="difficulty" value="{{ request.form.get('difficulty', 'medium') }}">
+    <button type="submit" class="btn" style="width:100%;background:#4ade80;color:#111">⬆ Climb</button>
+  </form>
+  <form method="POST" style="flex:1">
+    <input type="hidden" name="action" value="cashout">
+    <input type="hidden" name="bet_amount" value="{{ result.bet_amount }}">
+    <input type="hidden" name="levels" value="{{ result.levels }}">
+    <button type="submit" class="btn" style="width:100%;background:#fbbf24;color:#111">💰 Cashout</button>
+  </form>
+</div>
+{% endif %}
+</div>
+<style>.tower-levels{display:flex;flex-direction:column-reverse;align-items:center;gap:2px;min-height:100px;margin:12px 0}.level{width:40px;height:24px;border-radius:4px;background:#1a1a28;display:flex;align-items:center;justify-content:center;font-size:.7rem}.level.filled{background:#fbbf24}</style>
+{% endblock %}

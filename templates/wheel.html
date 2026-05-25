@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="game-box">
+<h2>🎡 Wheel of Fortune</h2>
+{% if result.segment is not none %}
+<div class="bet-result {{ 'win' if result.win else 'loss' }}">
+  <div class="wheel-segment">{{ result.segment_emoji }} {{ result.multiplier }}x</div>
+  <p>{{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,.0f}'.format(result.payout) }}</p>
+</div>
+{% endif %}
+<form method="POST">
+  <label>Bet Amount</label>
+  <input type="number" name="bet_amount" value="{{ MIN_BET }}" min="{{ MIN_BET }}" max="{{ user.balance }}" step="1000" required>
+  <button type="submit" class="btn spin-btn">🎡 Spin the Wheel</button>
+</form>
+<div class="wheel-segments">
+  <span>🍔 1.5x</span><span>🍟 1.2x</span><span>🥤 1x</span><span>⭐ 3x</span><span>🍗 1.5x</span>
+  <span>💎 5x</span><span>🔥 10x</span><span>🧊 0.5x</span><span>🍔 1.5x</span><span>🍟 1.2x</span>
+  <span>🥤 1x</span><span>⭐ 3x</span><span>🍗 1.5x</span><span>💎 5x</span><span>🔥 10x</span>
+  <span>🧊 0.5x</span><span>🍔 1.5x</span><span>🍟 1.2x</span><span>🥤 1x</span><span>💣 0x</span>
+</div>
+</div>
+<style>.wheel-segments{display:flex;flex-wrap:wrap;gap:4px;max-width:400px;margin:12px auto;justify-content:center}.wheel-segments span{background:#1a1a28;padding:4px 8px;border-radius:4px;font-size:.75rem;border:1px solid #2a2a3a}.wheel-segment{font-size:2rem;text-align:center;padding:12px}</style>
+{% endblock %}

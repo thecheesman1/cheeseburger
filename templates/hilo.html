@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="game-box">
+<h2>🃏 Hi-Lo</h2>
+{% if result.cards %}
+<div class="bet-result {{ 'win' if result.win else 'loss' }}">
+  <div class="card-row"><span class="card">{{ result.cards[0] }}</span><span class="vs">vs</span><span class="card">{{ result.cards[1] }}</span></div>
+  <p>{{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,.0f}'.format(result.payout) }}</p>
+</div>
+{% endif %}
+<form method="POST">
+  <label>Bet Amount</label>
+  <input type="number" name="bet_amount" value="{{ MIN_BET }}" min="{{ MIN_BET }}" max="{{ user.balance }}" step="1000" required>
+  <div style="display:flex;gap:8px;margin-top:8px">
+    <button type="submit" name="guess" value="higher" class="btn" style="flex:1;background:#4ade80;color:#111">⬆ Higher (2x)</button>
+    <button type="submit" name="guess" value="lower" class="btn" style="flex:1;background:#ef4444;color:#111">⬇ Lower (2x)</button>
+  </div>
+</form>
+</div>
+<style>.card-row{display:flex;align-items:center;justify-content:center;gap:12px;font-size:2rem}.card{background:#1a1a28;border:2px solid #ffd700;border-radius:8px;padding:12px 20px;font-weight:700}.vs{font-size:1rem;color:#888}</style>
+{% endblock %}

@@ -10,35 +10,21 @@
     {% endif %}
 </div>
 <div class="game-grid">
-    <a href="{{ url_for('crash') }}" class="game-card">
-        <div class="emoji">🚀</div>
-        <h3>Crash</h3>
-        <p>Cash out before it pops</p>
-    </a>
-    <a href="{{ url_for('slots') }}" class="game-card">
-        <div class="emoji">🎰</div>
-        <h3>Slots</h3>
-        <p>Match 3 symbols to win big</p>
-    </a>
-    <a href="{{ url_for('coinflip') }}" class="game-card">
-        <div class="emoji">🪙</div>
-        <h3>Coin Flip</h3>
-        <p>Double or nothing</p>
-    </a>
-    <a href="{{ url_for('dice') }}" class="game-card">
-        <div class="emoji">🎲</div>
-        <h3>Dice</h3>
-        <p>Guess the roll, win 6x</p>
-    </a>
-    <a href="{{ url_for('blackjack') }}" class="game-card">
-        <div class="emoji">🃏</div>
-        <h3>Blackjack</h3>
-        <p>Beat the dealer</p>
-    </a>
-    <a href="{{ url_for('crates') }}" class="game-card">
-        <div class="emoji">📦</div>
-        <h3>Crates</h3>
-        <p>Unbox rare skins</p>
-    </a>
+    <a href="{{ url_for('crash') }}" class="game-card"><div class="emoji">🚀</div><h3>Crash</h3><p>Cash out before it pops</p></a>
+    <a href="{{ url_for('slots') }}" class="game-card"><div class="emoji">🎰</div><h3>Slots</h3><p>Match 3 symbols</p></a>
+    <a href="{{ url_for('coinflip') }}" class="game-card"><div class="emoji">🪙</div><h3>Coin Flip</h3><p>Double or nothing</p></a>
+    <a href="{{ url_for('dice') }}" class="game-card"><div class="emoji">🎲</div><h3>Dice</h3><p>Guess the roll, win 6x</p></a>
+    <a href="{{ url_for('blackjack') }}" class="game-card"><div class="emoji">🃏</div><h3>Blackjack</h3><p>Beat the dealer</p></a>
+    <a href="{{ url_for('roulette') }}" class="game-card"><div class="emoji">🎡</div><h3>Roulette</h3><p>Bet red, black, or number</p></a>
+    <a href="{{ url_for('keno') }}" class="game-card"><div class="emoji">🔢</div><h3>Keno</h3><p>Pick numbers, win 1000x</p></a>
+    <a href="{{ url_for('plinko') }}" class="game-card"><div class="emoji">🟢</div><h3>Plinko</h3><p>Drop and multiply</p></a>
+    <a href="{{ url_for('mines') }}" class="game-card"><div class="emoji">💣</div><h3>Mines</h3><p>Avoid the bombs</p></a>
+    <a href="{{ url_for('wheel') }}" class="game-card"><div class="emoji">🎡</div><h3>Wheel</h3><p>Spin to win up to 10x</p></a>
+    <a href="{{ url_for('hilo') }}" class="game-card"><div class="emoji">🃏</div><h3>Hi-Lo</h3><p>Higher or lower?</p></a>
+    <a href="{{ url_for('limbo') }}" class="game-card"><div class="emoji">🚀</div><h3>Limbo</h3><p>Set target, beat the odds</p></a>
+    <a href="{{ url_for('baccarat') }}" class="game-card"><div class="emoji">🃏</div><h3>Baccarat</h3><p>Player vs Banker</p></a>
+    <a href="{{ url_for('scratchcard') }}" class="game-card"><div class="emoji">🟨</div><h3>Scratchcard</h3><p>Scratch for 500x</p></a>
+    <a href="{{ url_for('tower') }}" class="game-card"><div class="emoji">🗼</div><h3>Tower</h3><p>Climb the tower</p></a>
+    <a href="{{ url_for('crates') }}" class="game-card"><div class="emoji">📦</div><h3>Crates</h3><p>Unbox rare skins</p></a>
 </div>
 {% endblock %}

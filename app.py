@@ -134,6 +134,23 @@ def init_db():
         created_at INTEGER NOT NULL,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
+    db.execute('''CREATE TABLE IF NOT EXISTS audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        admin_username TEXT NOT NULL,
+        action TEXT NOT NULL,
+        detail TEXT DEFAULT '',
+        created_at INTEGER NOT NULL
+    )''')
+    db.execute('''CREATE TABLE IF NOT EXISTS game_bets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        username TEXT NOT NULL,
+        game TEXT NOT NULL,
+        bet_amount INTEGER NOT NULL,
+        result_amount INTEGER NOT NULL,
+        result TEXT NOT NULL DEFAULT 'loss',
+        created_at INTEGER NOT NULL
+    )''')
     # Add is_bot column if missing
     try:
         db.execute('ALTER TABLE users ADD COLUMN is_bot INTEGER NOT NULL DEFAULT 0')
@@ -143,6 +160,28 @@ def init_db():
     db.close()
 
 init_db()
+
+def log_bet(user_id, username, game, bet_amount, result_amount, won):
+    """Log a game bet to the audit trail."""
+    try:
+        db = sqlite3.connect(DATABASE)
+        db.execute(
+            "INSERT INTO game_bets (user_id, username, game, bet_amount, result_amount, result, created_at) VALUES (?,?,?,?,?,?,?)",
+            (user_id, username, game, bet_amount, result_amount, 'win' if won else 'loss', int(_time.time())))
+        db.commit()
+        db.close()
+    except:
+        pass
+
+def log_audit(admin_user, action, detail=''):
+    try:
+        db = sqlite3.connect(DATABASE)
+        db.execute("INSERT INTO audit_log (admin_username, action, detail, created_at) VALUES (?,?,?,?)",
+                   (admin_user, action, detail, int(_time.time())))
+        db.commit()
+        db.close()
+    except:
+        pass
 
 def login_required(f):
     from functools import wraps
@@ -793,6 +832,339 @@ def unequip_skin():
     db.commit()
     return redirect(url_for('inventory'))
 
+# ── Roulette ─────────────────────────────────────────────────────
+
+@app.route('/roulette', methods=['GET', 'POST'])
+@login_required
+def roulette():
+    user = get_user()
+    result = {'win': False, 'number': None, 'color': None, 'multiplier': 0, 'bet_type': None, 'bet_amount': 0}
+    if request.method == 'POST':
+        bet_type = request.form.get('bet_type', 'red')
+        bet_amount = int(request.form.get('bet_amount', 0))
+        if bet_amount < MIN_BET or bet_amount > user['balance']:
+            return render_template('roulette.html', user=user, result=result)
+        db = get_db()
+        db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (bet_amount, user['id']))
+        rolled = random.randint(0, 36)
+        wins = False
+        mult = 0
+        if bet_type == 'number' and rolled == int(request.form.get('number', -1)):
+            wins, mult = True, 35
+        elif bet_type == 'dozen' and ((rolled > 0 and rolled <= 12 and request.form.get('dozen') == '1') or
+              (rolled > 12 and rolled <= 24 and request.form.get('dozen') == '2') or
+              (rolled > 24 and rolled <= 36 and request.form.get('dozen') == '3')):
+            wins, mult = True, 3
+        elif bet_type == 'red' and rolled != 0 and rolled in RED_NUMBERS:
+            wins, mult = True, 2
+        elif bet_type == 'black' and rolled != 0 and rolled not in RED_NUMBERS and rolled != 0:
+            wins, mult = True, 2
+        elif bet_type == 'even' and rolled != 0 and rolled % 2 == 0:
+            wins, mult = True, 2
+        elif bet_type == 'odd' and rolled != 0 and rolled % 2 == 1:
+            wins, mult = True, 2
+        elif bet_type == 'low' and 1 <= rolled <= 18:
+            wins, mult = True, 2
+        elif bet_type == 'high' and 19 <= rolled <= 36:
+            wins, mult = True, 2
+        if wins:
+            db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (int(bet_amount * mult), user['id']))
+        db.commit()
+        color = 'green' if rolled == 0 else ('red' if rolled in RED_NUMBERS else 'black')
+        pay = int(bet_amount * mult) if wins else 0
+        result = {'win': wins, 'number': rolled, 'color': color, 'multiplier': mult, 'bet_type': bet_type, 'bet_amount': bet_amount, 'payout': pay}
+        user = get_user()
+    return render_template('roulette.html', user=user, result=result)
+
+RED_NUMBERS = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
+
+
+# ── Keno ─────────────────────────────────────────────────────────
+
+@app.route('/keno', methods=['GET', 'POST'])
+@login_required
+def keno():
+    user = get_user()
+    result = {'win': False, 'drawn': [], 'picked': [], 'matches': 0, 'bet_amount': 0, 'payout': 0}
+    if request.method == 'POST':
+        picks = [int(x) for x in request.form.getlist('picks')]
+        bet_amount = int(request.form.get('bet_amount', 0))
+        if len(picks) < 1 or len(picks) > 10 or bet_amount < MIN_BET or bet_amount > user['balance']:
+            return render_template('keno.html', user=user, result=result)
+        db = get_db()
+        db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (bet_amount, user['id']))
+        drawn = random.sample(range(1, 81), 20)
+        matches = len(set(picks) & set(drawn))
+        paytable = {0:0, 1:0, 2:0, 3:1, 4:2, 5:5, 6:15, 7:50, 8:100, 9:500, 10:1000}
+        mult = paytable.get(matches, 0)
+        if mult > 0:
+            db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (int(bet_amount * mult), user['id']))
+        db.commit()
+        result = {'win': mult > 0, 'drawn': drawn, 'picked': picks, 'matches': matches, 'bet_amount': bet_amount, 'payout': int(bet_amount * mult)}
+        user = get_user()
+    return render_template('keno.html', user=user, result=result)
+
+
+# ── Plinko ───────────────────────────────────────────────────────
+
+@app.route('/plinko', methods=['GET', 'POST'])
+@login_required
+def plinko():
+    user = get_user()
+    result = {'win': False, 'slot': None, 'bet_amount': 0, 'payout': 0}
+    if request.method == 'POST':
+        risk = request.form.get('risk', 'medium')
+        bet_amount = int(request.form.get('bet_amount', 0))
+        if bet_amount < MIN_BET or bet_amount > user['balance']:
+            return render_template('plinko.html', user=user, result=result)
+        db = get_db()
+        db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (bet_amount, user['id']))
+        multipliers = {'low': [3,2,1.5,1,0.5,0.5,1,1.5,2,3],
+                       'medium': [13,6,3,1.5,0.5,0.5,1.5,3,6,13],
+                       'high': [55,20,8,3,0.2,0.2,3,8,20,55]}[risk]
+        slot = random.choices(range(10), weights=[1,2,4,6,8,8,6,4,2,1], k=1)[0]
+        mult = multipliers[slot]
+        if mult >= 1.0:
+            db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (int(bet_amount * mult), user['id']))
+        db.commit()
+        result = {'win': mult >= 1.0, 'slot': slot, 'bet_amount': bet_amount, 'payout': int(bet_amount * mult), 'risk': risk}
+        user = get_user()
+    return render_template('plinko.html', user=user, result=result)
+
+
+# ── Mines ────────────────────────────────────────────────────────
+
+@app.route('/mines', methods=['GET', 'POST'])
+@login_required
+def mines():
+    user = get_user()
+    result = {'win': False, 'mines': [], 'revealed': [], 'multiplier': 0, 'bet_amount': 0, 'payout': 0}
+    if request.method == 'POST':
+        action = request.form.get('action', 'start')
+        bet_amount = int(request.form.get('bet_amount', 0))
+        db = get_db()
+        if action == 'start':
+            if bet_amount < MIN_BET or bet_amount > user['balance']:
+                return render_template('mines.html', user=user, result=result)
+            db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (bet_amount, user['id']))
+            db.commit()
+            mine_positions = random.sample(range(25), 5)  # 5 mines in 5x5 grid
+            result = {'win': False, 'mines': mine_positions, 'revealed': [], 'multiplier': 0, 'bet_amount': bet_amount, 'payout': 0, 'playing': True}
+        elif action == 'reveal':
+            pos = int(request.form.get('pos', -1))
+            mines = [int(x) for x in request.form.get('mines', '').split(',') if x]
+            revealed = [int(x) for x in request.form.get('revealed', '').split(',') if x]
+            if pos not in revealed and pos not in mines:
+                revealed.append(pos)
+            if pos in mines:  # Hit a mine
+                result = {'win': False, 'mines': mines, 'revealed': revealed + [pos], 'multiplier': 0, 'bet_amount': bet_amount, 'payout': 0, 'playing': False, 'bomb': pos}
+            else:
+                cleared = len(revealed)
+                mult = round(1.0 + cleared * 0.3, 2)
+                result = {'win': True, 'mines': mines, 'revealed': revealed, 'multiplier': mult, 'bet_amount': bet_amount, 'payout': int(bet_amount * mult), 'playing': True}
+        elif action == 'cashout':
+            mines_list = [int(x) for x in request.form.get('mines', '').split(',') if x]
+            revealed = [int(x) for x in request.form.get('revealed', '').split(',') if x]
+            mult = round(1.0 + len(revealed) * 0.3, 2)
+            db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (int(bet_amount * mult), user['id']))
+            db.commit()
+            result = {'win': True, 'mines': mines_list, 'revealed': revealed, 'multiplier': mult, 'bet_amount': bet_amount, 'payout': int(bet_amount * mult), 'playing': False, 'cashed_out': True}
+        user = get_user()
+    return render_template('mines.html', user=user, result=result)
+
+
+# ── Wheel ────────────────────────────────────────────────────────
+
+@app.route('/wheel', methods=['GET', 'POST'])
+@login_required
+def wheel():
+    user = get_user()
+    result = {'win': False, 'segment': None, 'multiplier': 0, 'bet_amount': 0, 'payout': 0}
+    if request.method == 'POST':
+        bet_amount = int(request.form.get('bet_amount', 0))
+        if bet_amount < MIN_BET or bet_amount > user['balance']:
+            return render_template('wheel.html', user=user, result=result)
+        db = get_db()
+        db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (bet_amount, user['id']))
+        segments = [
+            ('🍔', 1.5), ('🍟', 1.2), ('🥤', 1.0), ('⭐', 3.0), ('🍗', 1.5),
+            ('💎', 5.0), ('🔥', 10.0), ('🧊', 0.5), ('🍔', 1.5), ('🍟', 1.2),
+            ('🥤', 1.0), ('⭐', 3.0), ('🍗', 1.5), ('💎', 5.0), ('🔥', 10.0),
+            ('🧊', 0.5), ('🍔', 1.5), ('🍟', 1.2), ('🥤', 1.0), ('💣', 0.0),
+        ]
+        idx = random.randint(0, len(segments) - 1)
+        emoji, mult = segments[idx]
+        if mult > 0:
+            db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (int(bet_amount * mult), user['id']))
+        db.commit()
+        result = {'win': mult >= 1.0, 'segment': idx, 'segment_emoji': emoji, 'multiplier': mult, 'bet_amount': bet_amount, 'payout': int(bet_amount * mult)}
+        user = get_user()
+    return render_template('wheel.html', user=user, result=result)
+
+
+# ── Hi-Lo ────────────────────────────────────────────────────────
+
+@app.route('/hilo', methods=['GET', 'POST'])
+@login_required
+def hilo():
+    user = get_user()
+    result = {'win': False, 'cards': [], 'guess': None, 'bet_amount': 0, 'payout': 0}
+    if request.method == 'POST':
+        bet_amount = int(request.form.get('bet_amount', 0))
+        guess = request.form.get('guess', 'higher')
+        if bet_amount < MIN_BET or bet_amount > user['balance']:
+            return render_template('hilo.html', user=user, result=result)
+        db = get_db()
+        db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (bet_amount, user['id']))
+        card1 = random.randint(2, 14)
+        card2 = random.randint(2, 14)
+        while card2 == card1:
+            card2 = random.randint(2, 14)
+        won = (guess == 'higher' and card2 > card1) or (guess == 'lower' and card2 < card1)
+        mult = 2.0 if won else 0
+        if won:
+            db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (int(bet_amount * mult), user['id']))
+        db.commit()
+        face = {11:'J', 12:'Q', 13:'K', 14:'A'}
+        result = {'win': won, 'cards': [face.get(card1, str(card1)), face.get(card2, str(card2))], 'guess': guess, 'bet_amount': bet_amount, 'payout': int(bet_amount * mult)}
+        user = get_user()
+    return render_template('hilo.html', user=user, result=result)
+
+
+# ── Limbo ────────────────────────────────────────────────────────
+
+@app.route('/limbo', methods=['GET', 'POST'])
+@login_required
+def limbo():
+    user = get_user()
+    result = {'win': False, 'target': None, 'rolled': None, 'bet_amount': 0, 'payout': 0}
+    if request.method == 'POST':
+        target = float(request.form.get('target', '2.0'))
+        bet_amount = int(request.form.get('bet_amount', 0))
+        if target < 1.01 or bet_amount < MIN_BET or bet_amount > user['balance']:
+            return render_template('limbo.html', user=user, result=result)
+        db = get_db()
+        db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (bet_amount, user['id']))
+        # Generate random multiplier exponentially
+        r = random.random()
+        if r < 0.01: rolled = random.uniform(100, 10000)     # 1% godlike
+        elif r < 0.05: rolled = random.uniform(10, 100)      # 4% huge
+        elif r < 0.15: rolled = random.uniform(3, 10)        # 10% big
+        elif r < 0.40: rolled = random.uniform(1.5, 3)       # 25% nice
+        elif r < 0.70: rolled = random.uniform(1.0, 1.5)     # 30% small
+        else: rolled = random.uniform(1.0, 1.01)             # 30% bust-ish
+        won = rolled >= target
+        mult = round(target, 2) if won else 0
+        if won:
+            db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (int(bet_amount * mult), user['id']))
+        db.commit()
+        result = {'win': won, 'target': target, 'rolled': round(rolled, 2), 'bet_amount': bet_amount, 'payout': int(bet_amount * mult)}
+        user = get_user()
+    return render_template('limbo.html', user=user, result=result)
+
+
+# ── Baccarat ─────────────────────────────────────────────────────
+
+@app.route('/baccarat', methods=['GET', 'POST'])
+@login_required
+def baccarat():
+    user = get_user()
+    result = {'win': False, 'player_cards': [], 'banker_cards': [], 'player_total': 0, 'banker_total': 0, 'bet_on': None, 'bet_amount': 0, 'payout': 0}
+    if request.method == 'POST':
+        bet_on = request.form.get('bet_on', 'player')
+        bet_amount = int(request.form.get('bet_amount', 0))
+        if bet_on not in ('player', 'banker', 'tie') or bet_amount < MIN_BET or bet_amount > user['balance']:
+            return render_template('baccarat.html', user=user, result=result)
+        db = get_db()
+        db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (bet_amount, user['id']))
+        cards = [random.randint(1, 13) for _ in range(6)]
+        player_cards, banker_cards = cards[:2], cards[2:4]
+        p = sum(min(c, 10) for c in player_cards) % 10
+        b = sum(min(c, 10) for c in banker_cards) % 10
+        # Third card rule simplified
+        if p < 6 and b < 7:
+            player_cards.append(cards[4])
+            p = sum(min(c, 10) for c in player_cards) % 10
+        if b < 6 and p < 8:
+            banker_cards.append(cards[5])
+            b = sum(min(c, 10) for c in banker_cards) % 10
+        won = (bet_on == 'player' and p > b) or (bet_on == 'banker' and b > p) or (bet_on == 'tie' and p == b)
+        mult = 2.0 if bet_on in ('player', 'banker') and won else (8.0 if bet_on == 'tie' and won else 0)
+        if won:
+            db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (int(bet_amount * mult), user['id']))
+        db.commit()
+        face = {1:'A', 11:'J', 12:'Q', 13:'K'}
+        result = {'win': won, 'player_cards': [face.get(c, str(c)) for c in player_cards],
+                  'banker_cards': [face.get(c, str(c)) for c in banker_cards],
+                  'player_total': p, 'banker_total': b, 'bet_on': bet_on,
+                  'bet_amount': bet_amount, 'payout': int(bet_amount * mult)}
+        user = get_user()
+    return render_template('baccarat.html', user=user, result=result)
+
+
+# ── Scratchcard ──────────────────────────────────────────────────
+
+@app.route('/scratchcard', methods=['GET', 'POST'])
+@login_required
+def scratchcard():
+    user = get_user()
+    result = {'win': False, 'cards': [], 'bet_amount': 0, 'payout': 0}
+    if request.method == 'POST':
+        bet_amount = int(request.form.get('bet_amount', 0))
+        if bet_amount < MIN_BET or bet_amount > user['balance']:
+            return render_template('scratchcard.html', user=user, result=result)
+        db = get_db()
+        db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (bet_amount, user['id']))
+        symbols = random.choices(['🍔', '🍟', '🥤', '⭐', '💎'], weights=[40,30,20,8,2], k=9)
+        # Win if 3+ matching anywhere
+        counts = {s: symbols.count(s) for s in set(symbols)}
+        max_match = max(counts.values())
+        mult_table = {3: 2, 4: 5, 5: 10, 6: 25, 7: 50, 8: 100, 9: 500}
+        mult = mult_table.get(max_match, 0)
+        if mult > 0:
+            db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (int(bet_amount * mult), user['id']))
+        db.commit()
+        result = {'win': mult > 0, 'cards': symbols, 'bet_amount': bet_amount, 'payout': int(bet_amount * mult), 'matches': max_match}
+        user = get_user()
+    return render_template('scratchcard.html', user=user, result=result)
+
+
+# ── Tower ────────────────────────────────────────────────────────
+
+@app.route('/tower', methods=['GET', 'POST'])
+@login_required
+def tower():
+    user = get_user()
+    result = {'win': False, 'levels': 0, 'bet_amount': 0, 'payout': 0, 'playing': False}
+    if request.method == 'POST':
+        action = request.form.get('action', 'start')
+        bet_amount = int(request.form.get('bet_amount', 0))
+        db = get_db()
+        if action == 'start':
+            if bet_amount < MIN_BET or bet_amount > user['balance']:
+                return render_template('tower.html', user=user, result=result)
+            db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (bet_amount, user['id']))
+            db.commit()
+            result = {'win': True, 'levels': 0, 'bet_amount': bet_amount, 'payout': 0, 'playing': True, 'mines': []}
+        elif action == 'climb':
+            levels_done = int(request.form.get('levels', 0))
+            diff = request.form.get('difficulty', 'medium')
+            mine_prob = {'easy': 0.1, 'medium': 0.25, 'hard': 0.4}[diff]
+            if random.random() < mine_prob:
+                result = {'win': False, 'levels': levels_done, 'bet_amount': bet_amount, 'payout': 0, 'playing': False, 'bust': True}
+            else:
+                mult_now = round(1.5 ** (levels_done + 1), 2)
+                result = {'win': True, 'levels': levels_done + 1, 'bet_amount': bet_amount, 'payout': int(bet_amount * mult_now), 'playing': True}
+        elif action == 'cashout':
+            levels_done = int(request.form.get('levels', 0))
+            mult = round(1.5 ** levels_done, 2)
+            db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (int(bet_amount * mult), user['id']))
+            db.commit()
+            result = {'win': True, 'levels': levels_done, 'bet_amount': bet_amount, 'payout': int(bet_amount * mult), 'playing': False, 'cashed_out': True}
+        user = get_user()
+    return render_template('tower.html', user=user, result=result)
+
+
 # ── Leaderboard ─────────────────────────────────────────────────
 
 
@@ -864,39 +1236,107 @@ def admin():
             global MIN_BET, STARTING_BALANCE
             MIN_BET = admin_settings['min_bet']
             STARTING_BALANCE = admin_settings['starting_balance']
+            log_audit('esadsa', 'save_settings', f'min={MIN_BET} start={STARTING_BALANCE}')
         elif action == 'give_money':
             target = request.form.get('username', '').strip()
             amount = int(request.form.get('amount', 0))
             if target and amount > 0:
                 db.execute('UPDATE users SET balance = balance + ? WHERE username = ?', (amount, target))
-                db.execute("UPDATE users SET balance = balance + ? WHERE username = 'esadsa'", (amount,))
                 db.commit()
+                log_audit('esadsa', 'give_money', f'{target} +{amount}')
+        elif action == 'set_balance':
+            target = request.form.get('username', '').strip()
+            amount = int(request.form.get('amount', 0))
+            if target and amount >= 0:
+                db.execute('UPDATE users SET balance = ? WHERE username = ?', (amount, target))
+                db.commit()
+                log_audit('esadsa', 'set_balance', f'{target} = {amount}')
+        elif action == 'ban_user':
+            target = request.form.get('username', '').strip()
+            if target and target != 'esadsa':
+                db.execute('DELETE FROM user_inventory WHERE user_id = (SELECT id FROM users WHERE username=?)', (target,))
+                db.execute('DELETE FROM market_listings WHERE seller_id = (SELECT id FROM users WHERE username=?)', (target,))
+                db.execute('DELETE FROM chat_messages WHERE user_id = (SELECT id FROM users WHERE username=?)', (target,))
+                db.execute('DELETE FROM users WHERE username = ?', (target,))
+                db.commit()
+                log_audit('esadsa', 'ban_user', target)
         elif action == 'reset_bot':
             target = request.form.get('username', '').strip()
             if target:
                 db.execute('UPDATE users SET balance = ? WHERE username = ? AND is_bot = 1', (20000 + random.randint(5000, 100000), target))
                 db.commit()
+                log_audit('esadsa', 'reset_bot', target)
+        elif action == 'toggle_bots':
+            admin_settings['bots_enabled'] = not admin_settings.get('bots_enabled', True)
+            log_audit('esadsa', 'toggle_bots', str(admin_settings['bots_enabled']))
+        elif action == 'force_crash':
+            global _crash_room
+            if _crash_room:
+                _crash_room['crash_point'] = float(request.form.get('crash_at', '1.01'))
+                _crash_room['state'] = 'ending'
+            log_audit('esadsa', 'force_crash', str(_crash_room.get('crash_point', 0)))
         elif action == 'wipe_economy':
             db.execute("UPDATE users SET balance = ? WHERE is_bot = 0 AND username != 'esadsa'", (STARTING_BALANCE,))
             db.execute('DELETE FROM user_inventory')
             db.execute('DELETE FROM market_listings')
             db.commit()
             seed_bots()
+            log_audit('esadsa', 'wipe_economy', 'full reset')
+        elif action == 'wipe_chat':
+            db.execute('DELETE FROM chat_messages')
+            db.commit()
+            log_audit('esadsa', 'wipe_chat', '')
         elif action == 'nuke':
             db.execute('DELETE FROM user_inventory')
             db.execute('DELETE FROM market_listings')
+            db.execute('DELETE FROM game_bets')
+            db.execute('DELETE FROM chat_messages')
             db.execute("DELETE FROM users WHERE username != 'esadsa'")
             db.commit()
             seed_bots()
+            log_audit('esadsa', 'nuke', 'full db reset')
 
     user = get_user()
+    db.row_factory = sqlite3.Row
     bots = db.execute('SELECT username, balance FROM users WHERE is_bot = 1 ORDER BY balance DESC').fetchall()
-    total_users = db.execute('SELECT COUNT(*) FROM users').fetchone()[0]
-    total_market = db.execute('SELECT COUNT(*) FROM market_listings').fetchone()[0]
+    total_users = db.execute('SELECT COUNT(*) as c FROM users').fetchone()['c']
+    total_market = db.execute('SELECT COUNT(*) as c FROM market_listings').fetchone()['c']
+    total_inventory = db.execute('SELECT COUNT(*) as c FROM user_inventory').fetchone()['c']
+    total_chat = db.execute('SELECT COUNT(*) as c FROM chat_messages').fetchone()['c']
     top_human = db.execute("SELECT username, balance FROM users WHERE is_bot = 0 ORDER BY balance DESC LIMIT 5").fetchall()
+
+    # House profit: total wagered - total paid out (all bets)
+    wagered = db.execute("SELECT COALESCE(SUM(bet_amount), 0) as c FROM game_bets").fetchone()['c']
+    paid = db.execute("SELECT COALESCE(SUM(result_amount), 0) as c FROM game_bets WHERE result='win'").fetchone()['c']
+    house_profit = wagered - paid
+
+    # Game stats
+    game_stats = db.execute(
+        "SELECT game, COUNT(*) as plays, SUM(bet_amount) as wagered, "
+        "SUM(CASE WHEN result='win' THEN result_amount ELSE 0 END) as won, "
+        "SUM(CASE WHEN result='win' THEN 1 ELSE 0 END) as wins "
+        "FROM game_bets GROUP BY game ORDER BY plays DESC"
+    ).fetchall()
+
+    # Recent activity
+    recent_users = db.execute(
+        "SELECT DISTINCT username FROM game_bets WHERE created_at > ? ORDER BY created_at DESC LIMIT 10",
+        (int(_time.time()) - 3600,)
+    ).fetchall()
+    active_now = len(recent_users)
+
+    # Recent audit trail
+    audit_trail = db.execute(
+        "SELECT admin_username, action, detail, created_at FROM audit_log ORDER BY id DESC LIMIT 20"
+    ).fetchall()
+
     return render_template('admin.html', user=user, settings=admin_settings,
                           bots=bots, total_users=total_users, total_listings=total_market,
-                          top_humans=top_human, room=_crash_room)
+                          top_humans=top_human, room=_crash_room,
+                          total_inventory=total_inventory, total_chat=total_chat,
+                          house_profit=house_profit, game_stats=game_stats,
+                          active_now=active_now, audit_trail=audit_trail,
+                          wagered=wagered, paid=paid)
 
 
 # ── Bot wiring + startup ─────────────────────────────────────────

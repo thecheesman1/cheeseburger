@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="game-box">
+<h2>🚀 Limbo</h2>
+{% if result.rolled is not none %}
+<div class="bet-result {{ 'win' if result.win else 'loss' }}">
+  <div class="limbo-display"><span class="big-num">{{ result.rolled }}x</span></div>
+  <p>Target: {{ result.target }}x → {{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,.0f}'.format(result.payout) }}</p>
+</div>
+{% endif %}
+<form method="POST">
+  <label>Bet Amount</label>
+  <input type="number" name="bet_amount" value="{{ MIN_BET }}" min="{{ MIN_BET }}" max="{{ user.balance }}" step="1000" required>
+  <label>Target Multiplier</label>
+  <input type="number" name="target" value="2.0" min="1.01" max="1000" step="0.01" class="num-input">
+  <button type="submit" class="btn spin-btn">🚀 Launch</button>
+</form>
+</div>
+<style>.limbo-display{text-align:center;padding:16px}.big-num{font-size:3rem;font-weight:900;color:#ffd700}</style>
+{% endblock %}

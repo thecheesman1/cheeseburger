@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="game-box">
+<h2>🃏 Baccarat</h2>
+{% if result.bet_on %}
+<div class="bet-result {{ 'win' if result.win else 'loss' }}">
+  <div style="display:flex;justify-content:space-around;gap:20px">
+    <div><b>Player</b> ({{ result.player_total }})<br><span class="card-small">{{ result.player_cards|join(' ') }}</span></div>
+    <div><b>Banker</b> ({{ result.banker_total }})<br><span class="card-small">{{ result.banker_cards|join(' ') }}</span></div>
+  </div>
+  <p>Bet on <b>{{ result.bet_on }}</b> → {{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,.0f}'.format(result.payout) }}</p>
+</div>
+{% endif %}
+<form method="POST">
+  <label>Bet Amount</label>
+  <input type="number" name="bet_amount" value="{{ MIN_BET }}" min="{{ MIN_BET }}" max="{{ user.balance }}" step="1000" required>
+  <div style="display:flex;gap:8px;margin-top:8px">
+    <button type="submit" name="bet_on" value="player" class="btn" style="flex:1;background:#4ade80;color:#111">👤 Player (2x)</button>
+    <button type="submit" name="bet_on" value="banker" class="btn" style="flex:1;background:#60a5fa;color:#111">🏦 Banker (2x)</button>
+    <button type="submit" name="bet_on" value="tie" class="btn" style="flex:1;background:#fbbf24;color:#111">🤝 Tie (8x)</button>
+  </div>
+</form>
+</div>
+<style>.card-small{font-size:1.2rem;letter-spacing:2px}</style>
+{% endblock %}

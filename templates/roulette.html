@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="game-box">
+<h2>🎡 Roulette <span class="badge">35x max</span></h2>
+{% if result.number is not none %}
+<div class="bet-result {{ 'win' if result.win else 'loss' }}">
+  <div class="roulette-ball" style="background:{{ result.color }}">{{ result.number }}</div>
+  <p>{{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,.0f}'.format(result.payout) }}</p>
+</div>
+{% endif %}
+<form method="POST">
+  <label>Bet Amount</label>
+  <input type="number" name="bet_amount" value="{{ MIN_BET }}" min="{{ MIN_BET }}" max="{{ user.balance }}" step="1000" required>
+  <label>Bet Type</label>
+  <select name="bet_type" onchange="toggleNumber(this.value)" class="bet-select">
+    <option value="red">🔴 Red (2x)</option>
+    <option value="black">⚫ Black (2x)</option>
+    <option value="even">Even (2x)</option>
+    <option value="odd">Odd (2x)</option>
+    <option value="low">1-18 (2x)</option>
+    <option value="high">19-36 (2x)</option>
+    <option value="dozen">Dozen (3x)</option>
+    <option value="number">Straight Up (35x)</option>
+  </select>
+  <div id="number-pick" style="display:none;margin-top:8px;">
+    <input type="number" name="number" min="0" max="36" value="17" class="num-input">
+  </div>
+  <div id="dozen-pick" style="display:none;margin-top:8px;">
+    <select name="dozen"><option value="1">1st 12 (1-12)</option><option value="2">2nd 12 (13-24)</option><option value="3">3rd 12 (25-36)</option></select>
+  </div>
+  <button type="submit" class="btn spin-btn">🎡 Spin</button>
+</form>
+</div>
+<style>.roulette-ball{width:60px;height:60px;border-radius:50%;margin:12px auto;font-size:28px;font-weight:700;line-height:60px;text-align:center;border:3px solid #fff3}.bet-select{width:100%;padding:8px;background:#1a1a28;color:#ddd;border:1px solid #2a2a3a;border-radius:4px;margin:8px 0}</style>
+<script>function toggleNumber(v){document.getElementById('number-pick').style.display=v==='number'?'block':'none';document.getElementById('dozen-pick').style.display=v==='dozen'?'block':'none'}</script>
+{% endblock %}

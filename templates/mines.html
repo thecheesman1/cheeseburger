@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="game-box">
+<h2>💣 Mines</h2>
+{% if result.bomb is not none %}
+<div class="bet-result loss"><p>💥 BOOM! Hit a mine at position {{ result.bomb }}. Lost ${{ '{:,.0f}'.format(result.bet_amount) }}</p></div>
+{% elif result.cashed_out %}
+<div class="bet-result win"><p>💰 Cashed out! {{ result.revealed|length }} gems × {{ result.multiplier }}x = ${{ '{:,.0f}'.format(result.payout) }}</p></div>
+{% endif %}
+{% if not result.playing %}
+<form method="POST">
+  <input type="hidden" name="action" value="start">
+  <label>Bet Amount</label>
+  <input type="number" name="bet_amount" value="{{ MIN_BET }}" min="{{ MIN_BET }}" max="{{ user.balance }}" step="1000" required>
+  <button type="submit" class="btn spin-btn">▶️ Start</button>
+</form>
+{% else %}
+<div class="mines-grid">
+  {% for i in range(25) %}
+  <form method="POST" style="display:inline">
+    <input type="hidden" name="action" value="reveal">
+    <input type="hidden" name="pos" value="{{ i }}">
+    <input type="hidden" name="mines" value="{{ result.mines|join(',') }}">
+    <input type="hidden" name="revealed" value="{{ result.revealed|join(',') }}">
+    <input type="hidden" name="bet_amount" value="{{ result.bet_amount }}">
+    <button class="mine-cell {{ 'revealed' if i in result.revealed else '' }}" {{ 'disabled' if i in result.revealed else '' }}>
+      {{ '💎' if i in result.revealed else '?' }}
+    </button>
+  </form>
+  {% endfor %}
+</div>
+<p style="margin-top:8px">💎 {{ result.revealed|length }} safe • {{ result.multiplier }}x</p>
+<form method="POST" style="margin-top:8px">
+  <input type="hidden" name="action" value="cashout">
+  <input type="hidden" name="mines" value="{{ result.mines|join(',') }}">
+  <input type="hidden" name="revealed" value="{{ result.revealed|join(',') }}">
+  <input type="hidden" name="bet_amount" value="{{ result.bet_amount }}">
+  <button type="submit" class="btn cashout-btn">💰 Cashout ${{ '{:,.0f}'.format(result.payout) }}</button>
+</form>
+{% endif %}
+</div>
+<style>.mines-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;max-width:300px;margin:12px auto}.mine-cell{width:100%;aspect-ratio:1;font-size:1.5rem;background:#1a1a28;border:1px solid #2a2a3a;border-radius:6px;cursor:pointer}.mine-cell:hover{background:#2a2a3a}.mine-cell.revealed{background:#1a3a1a;border-color:#4ade80}.mine-cell:disabled{cursor:default}.cashout-btn{background:#4ade80;color:#111;font-weight:700;width:100%}</style>
+{% endblock %}
