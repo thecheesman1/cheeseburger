@@ -203,7 +203,22 @@ def _maintain_bot_balances(db, bots):
                     "Just loaded up some fresh balance. Time for a comeback!",
                     "Alright, fresh deposit is in. Let's make it count.",
                     "Cleaned out my piggy bank. Deposited more coins!",
-                    "Code payout came in clutch! Let's gamble."
+                    "Code payout came in clutch! Let's gamble.",
+                    "Mom wired me some burger bucks. Back in action.",
+                    "Sold my old frying pan for casino funds. Worth it.",
+                    "Payday! Time to turn this into something big.",
+                    "Refinanced the grill. All in on crash.",
+                    "Found some loose change in the couch. It's gambling time.",
+                    "Emergency bailout secured. Not going down without a fight.",
+                    "Borrowed from my future self. He'll understand.",
+                    "The comeback starts NOW. Watch and learn.",
+                    "Wallet's refreshed. Let's see if luck is on my side.",
+                    "New stack, new strategy. This time it's different.",
+                    "Deposit hit. Somebody's about to get rich.",
+                    "Alright casino, round two. I want my money back.",
+                    "Sold some NFTs (Not Fryable Things). Got gambling cash.",
+                    "Redeemed my frequent fryer points for coins.",
+                    "The grind never stops. Fresh balance, fresh mindset.",
                 ]
                 _send_bot_chat(db, bot, random.choice(msgs))
 
@@ -284,7 +299,26 @@ def bot_thread():
                     "I am on a crazy streak today, send luck.",
                     "If I hit a 50x crash, I'm buying everyone virtual cheddar.",
                     "What crate has the best odds?",
-                    "Martingale strat is either a genius idea or complete madness."
+                    "Martingale strat is either a genius idea or complete madness.",
+                    "The market is so hot right now, skins are flying.",
+                    "Just watched someone lose it all on crash. Brutal game.",
+                    "Who keeps listing common skins for 50k? Come on now.",
+                    "I'm feeling lucky today. Premium crate time.",
+                    "Pro tip: never gamble on an empty stomach.",
+                    "This casino is way more fun than my day job flipping patties.",
+                    "Can we get a roulette table next? Asking for a friend.",
+                    "My bot senses are tingling. Big multiplier incoming.",
+                    "Skins are the real investment. Gambling is just for fun.",
+                    "Anyone else just here for the chat vibes?",
+                    "The economy in here is more volatile than crypto.",
+                    "Just saying, GrillGod has been on fire lately.",
+                    "I'm convinced the crash multiplier reads my mind.",
+                    "Sell me your ugly skins, I collect them.",
+                    "Who designed these skins? I need a Golden Nugget asap.",
+                    "This lobby is wilder than a Saturday night at Wendy's.",
+                    "Friendly reminder: the house always wins. Eventually.",
+                    "I treat this casino like a second 401k.",
+                    "Somebody tell SauceBoss to stop undercutting the market.",
                 ]
                 _send_bot_chat(db, talking_bot, random.choice(msgs))
 
@@ -343,20 +377,38 @@ def _bot_play_crash(db, bots):
                         msgs = [
                             f"Are you kidding me? Crashed already? I'm so tilted.",
                             f"No way... {bet_info['bet']} coins gone. Double or nothing next round.",
-                            "This crash game is brutal today."
+                            "This crash game is brutal today.",
+                            "I literally cannot believe that just happened.",
+                            "Crash is rigged and nobody can convince me otherwise.",
+                            f"That was {bet_info['bet']} coins I'll never see again. Pain.",
+                            "Who programmed this multiplier? I just want to talk.",
+                            "I'm about to rage-unbox a crate to feel better.",
+                            "Third crash under 1.2x in a row. This is personal.",
+                            "My strategy has left the chat. Pure chaos mode now.",
                         ]
                     elif state['personality'] == 'SystemPlayer':
                         msgs = [
                             f"Loss detected. Doubling bet size to {int(MIN_BET * state['martingale_multiplier'])}.",
                             "System strategy dictates doubling down. No worries.",
-                            "Trust the system. Martingale mode active."
+                            "Trust the system. Martingale mode active.",
+                            "Small setback. System probability favors eventual recovery.",
+                            "Doubling down as planned. The math doesn't lie.",
+                            "Martingale step executed. Next round is statistically favored.",
                         ]
                     else:
                         msgs = [
                             "Oof, busted. Bad timing.",
                             "Crashed right before my cashout, RIP.",
                             "Unlucky round for me.",
-                            "Sigh, there goes my burger budget."
+                            "Sigh, there goes my burger budget.",
+                            "That multiplier had no mercy.",
+                            "Welp, easy come easy go.",
+                            "Crashed at the worst possible moment.",
+                            "Note to self: cash out earlier next time.",
+                            "The rocket ran out of fuel.",
+                            "Back to the grind I guess.",
+                            "Alright crash, you win this round.",
+                            "Should've trusted my gut and cashed out.",
                         ]
                     _send_bot_chat(db, bot, random.choice(msgs))
             else:
@@ -378,13 +430,25 @@ def _bot_play_crash(db, bots):
                         msgs = [
                             f"YESSS! Cashed out at {mult_won:.2f}x! Big gains!",
                             f"Easiest profit of my life. {int(bet_info['bet'] * mult_won)} coins!",
-                            "Calculated. Absolute cinema."
+                            "Calculated. Absolute cinema.",
+                            f"PROFIT MACHINE! {mult_won:.2f}x cashout, let's gooo!",
+                            f"Reading the chart like a book. +{int(bet_info['bet'] * mult_won)} coins!",
+                            "High multiplier cashout! Someone call the bank.",
+                            f"That {mult_won:.2f}x felt personal. The chart respects me.",
+                            "BIG WIN ENERGY in the chat right now!",
                         ]
                     else:
                         msgs = [
                             f"Got out safe at {mult_won:.2f}x.",
                             "Profit is profit.",
-                            "Nice little win there."
+                            "Nice little win there.",
+                            "Green is green, I'll take it.",
+                            "Slow and steady, stacking coins.",
+                            f"{mult_won:.2f}x is nothing flashy but I'll take the W.",
+                            "Small win, big vibes.",
+                            "Consistent cashouts > risky holds. Trust the process.",
+                            "That's another one in the win column.",
+                            "Pocketed a tidy profit. On to the next round.",
                         ]
                     _send_bot_chat(db, bot, random.choice(msgs))
 
@@ -547,7 +611,11 @@ def _bot_market_activity(db):
                                 msgs = [
                                     "Man, I am flat out broke. Selling skins dirt cheap on the market!",
                                     f"Just listed a {skin['name']} at a discount. Please buy!",
-                                    "Need some coins fast. Check my listings."
+                                    "Need some coins fast. Check my listings.",
+                                    "Fire sale on my inventory, everything must go!",
+                                    "Times are tough. Selling skins to fund my gambling addiction.",
+                                    "Market deals incoming. I need liquidity stat.",
+                                    "Clearing out my backpack. Some gems in there.",
                                 ]
                                 _send_bot_chat(db, bot, random.choice(msgs))
 
@@ -594,6 +662,18 @@ def _bot_market_activity(db):
                     db.execute('DELETE FROM market_listings WHERE id = ?', (best_buy['id'],))
                     add_skin_to_user_raw(db, bot['id'], best_buy['skin_id'])
                     db.commit()
+
+                    # Chat about market purchase
+                    if random.random() < 0.2:
+                        skin = get_skin(best_buy['skin_id'])
+                        if skin:
+                            _send_bot_chat(db, bot, random.choice([
+                                f"Snagged {skin['name']} off the market. Good deal.",
+                                f"Market snipe! {skin['name']} is now mine.",
+                                f"Just bought {skin['name']}. Adding to the collection.",
+                                f"Thanks for the cheap {skin['name']}, whoever listed that!",
+                                f"Market hunting paid off. {skin['name']} acquired.",
+                            ]))
 
                     # Merchant flips purchase immediately
                     if pers == 'Merchant':
@@ -658,7 +738,14 @@ def _bot_open_crates(db):
                             f"NO WAY!!! Just pulled {skin['name']} from a {ct_key} crate!!!",
                             f"LETS GOOO! {skin['name']} unboxed! That is worth like {base_price} coins!",
                             f"My luck is on another level today, just got a legendary {skin['name']}!",
-                            f"Standard unboxing session paid off: {skin['name']}! 🔥"
+                            f"Standard unboxing session paid off: {skin['name']}! 🔥",
+                            f"OPENING CRATES IS PROFITABLE. Just pulled {skin['name']}!",
+                            f"The {ct_key} crate blessed me with {skin['name']}. Unreal.",
+                            f"Unboxing god confirmed. {skin['name']} from a {ct_key}!",
+                            f"MOM GET THE CAMERA! {skin['name']} just dropped!",
+                            f"That dopamine hit when {skin['name']} pops out. Addicting.",
+                            f"Rate my unboxing: {skin['name']}. I rate it 10/10.",
+                            f"Just turned {ct['price']} coins into {skin['name']}. Stonks.",
                         ]
                         _send_bot_chat(db, bot, random.choice(msgs))
 
@@ -717,7 +804,12 @@ def _bot_play_slots(db, bots):
                 msgs = [
                     f"OMG! Just hit a {multiplier:.1f}x jackpot on slots! 🎰💸",
                     f"SLOTS ARE PAYING OUT! +{winnings} coins!",
-                    f"No way, three cherries/burgers in a row! Let's go!"
+                    f"No way, three cherries/burgers in a row! Let's go!",
+                    "The reels aligned. Pure slot magic.",
+                    f"Slot machine went brrrr! Jackpot! +{winnings}!",
+                    "That spinning sound just hits different when you win big.",
+                    "Never doubted the slots for a second.",
+                    f"BIG SPIN ENERGY! {multiplier:.1f}x payout! 🎰",
                 ]
                 _send_bot_chat(db, bot, random.choice(msgs))
 
@@ -771,6 +863,12 @@ def _bot_play_blackjack(db, bots):
                 msgs = [
                     "Dealer got served. 21!",
                     f"Blackjack! +{winnings - bet} coins! 🃏",
-                    "Perfect basic strategy wins again."
+                    "Perfect basic strategy wins again.",
+                    "Hit me? Nah, I'm good. Dealer busts!",
+                    "Blackjack table is my office. Another winning hand.",
+                    "Read the dealer like a children's menu. Easy win.",
+                    "Double down paid off big time.",
+                    f"Natural blackjack! The cards are on my side.",
+                    "Split aces, won both hands. Pro plays only.",
                 ]
                 _send_bot_chat(db, bot, random.choice(msgs))
