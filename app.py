@@ -131,6 +131,7 @@ def bot_thread():
     while True:
         try:
             db = sqlite3.connect(DATABASE)
+            db.row_factory = sqlite3.Row
             bots = db.execute("SELECT id, username, balance FROM users WHERE is_bot = 1").fetchall()
             if not bots:
                 db.close()
@@ -167,20 +168,21 @@ def bot_thread():
                             db.commit()
 
             # Bot market activity
-            if random.random() < 0.3:
+            if random.random() < 0.6:
                 _bot_market_activity(db)
 
             # Bot crate opening
-            if random.random() < 0.2:
+            if random.random() < 0.5:
                 _bot_open_crates(db)
 
             db.close()
-        except Exception as e:
+        except:
             pass
-        _time.sleep(random.uniform(2, 5))
+        _time.sleep(random.uniform(1, 3))
 
 def _bot_market_activity(db):
     """Bots list items and buy from market"""
+    db.row_factory = sqlite3.Row
     bots = db.execute("SELECT id, username, balance FROM users WHERE is_bot = 1").fetchall()
     for bot in bots:
         if random.random() < 0.3:
@@ -217,6 +219,7 @@ def _bot_market_activity(db):
 
 def _bot_open_crates(db):
     """Bots occasionally open crates"""
+    db.row_factory = sqlite3.Row
     bots = db.execute("SELECT id, balance FROM users WHERE is_bot = 1").fetchall()
     for bot in bots:
         if random.random() < 0.4:
