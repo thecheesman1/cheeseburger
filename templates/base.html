@@ -5,6 +5,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cheeseburger Casino</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* ── Sidebar Chat ───────────────────── */
+        .app-layout { display: flex; min-height: calc(100vh - 56px); }
+        .main-content { flex: 1; min-width: 0; padding: 1.5rem; }
+        .chat-sidebar {
+            width: 300px; min-width: 300px;
+            border-left: 1px solid #2a2a3a;
+            background: #12121a;
+            display: flex; flex-direction: column;
+            max-height: calc(100vh - 56px);
+            position: sticky; top: 56px;
+        }
+        .chat-sidebar.collapsed { width: 36px; min-width: 36px; }
+        .chat-sidebar.collapsed .chat-body,
+        .chat-sidebar.collapsed .chat-input-row,
+        .chat-sidebar.collapsed .chat-header-text { display: none; }
+        .chat-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0.6rem 0.8rem; border-bottom: 1px solid #2a2a3a;
+            font-weight: 700; font-size: 0.85rem; color: #ccc;
+            flex-shrink: 0;
+        }
+        .chat-toggle { cursor: pointer; background: none; border: none; color: #888; font-size: 1.1rem; padding: 2px 6px; }
+        .chat-toggle:hover { color: #ffd700; }
+        .chat-body { flex: 1; overflow-y: auto; padding: 0.5rem; display: flex; flex-direction: column; gap: 4px; }
+        .chat-body::-webkit-scrollbar { width: 4px; }
+        .chat-body::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 2px; }
+        .chat-msg { font-size: 0.78rem; padding: 4px 6px; border-radius: 4px; line-height: 1.35; }
+        .chat-msg .who { font-weight: 700; margin-right: 4px; }
+        .chat-msg.chat-bot .who { color: #7c8aff; }
+        .chat-msg.chat-buy .who { color: #4ecdc4; }
+        .chat-msg.chat-sell .who { color: #ff6b6b; }
+        .chat-msg.chat-me .who { color: #ffd700; }
+        .chat-input-row { display: flex; padding: 0.5rem; border-top: 1px solid #2a2a3a; gap: 4px; flex-shrink: 0; }
+        .chat-input-row input {
+            flex: 1; background: #1a1a28; border: 1px solid #2a2a3a; color: #ddd;
+            padding: 6px 8px; border-radius: 4px; font-size: 0.8rem; outline: none;
+        }
+        .chat-input-row input:focus { border-color: #ffd700; }
+        .chat-input-row button {
+            background: #ffd700; color: #111; border: none; padding: 6px 10px;
+            border-radius: 4px; font-size: 0.8rem; font-weight: 700; cursor: pointer;
+        }
+        .chat-input-row button:hover { background: #ffed4a; }
+        @media (max-width: 768px) {
+            .chat-sidebar { display: none; }
+        }
+    </style>
 </head>
 <body>
     <nav>
@@ -26,8 +74,86 @@
             {% endif %}
         </div>
     </nav>
-    <div class="container">
-        {% block content %}{% endblock %}
+    <div class="app-layout">
+        <div class="main-content">
+            {% block content %}{% endblock %}
+        </div>
+        {% if user %}
+        <div class="chat-sidebar" id="chatSidebar">
+            <div class="chat-header">
+                <span class="chat-header-text">💬 Casino Chat</span>
+                <button class="chat-toggle" onclick="toggleChat()" title="Toggle chat">◀</button>
+            </div>
+            <div class="chat-body" id="chatBody"></div>
+            <div class="chat-input-row">
+                <input type="text" id="chatInput" placeholder="Say something..." maxlength="200"
+                       onkeydown="if(event.key==='Enter')sendChat()">
+                <button onclick="sendChat()">Send</button>
+            </div>
+        </div>
+        {% endif %}
     </div>
+    {% if user %}
+    <script>
+        var CHAT_USER = "{{ user['username'] }}";
+        var lastMsgId = 0;
+        var chatOpen = true;
+
+        function toggleChat() {
+            chatOpen = !chatOpen;
+            var s = document.getElementById('chatSidebar');
+            var b = s.querySelector('.chat-toggle');
+            if (chatOpen) { s.classList.remove('collapsed'); b.textContent = '◀'; }
+            else { s.classList.add('collapsed'); b.textContent = '▶'; }
+        }
+
+        function sendChat() {
+            var inp = document.getElementById('chatInput');
+            var text = inp.value.trim();
+            if (!text) return;
+            inp.value = '';
+            var f = document.createElement('form');
+            f.method = 'POST'; f.action = '/chat/send';
+            f.style.display = 'none';
+            var h = document.createElement('input'); h.name = 'message'; h.value = text; f.appendChild(h);
+            document.body.appendChild(f); f.submit();
+        }
+
+        function pollChat() {
+            fetch('/chat/messages').then(r => r.json()).then(function(msgs) {
+                var body = document.getElementById('chatBody');
+                var atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 30;
+                var html = '';
+                for (var i = 0; i < msgs.length; i++) {
+                    var m = msgs[i];
+                    if (m.id <= lastMsgId) continue;
+                    lastMsgId = m.id;
+                    var cls = 'chat-msg';
+                    if (m.msg_type === 'market_buy') cls += ' chat-buy';
+                    else if (m.msg_type === 'market_sell') cls += ' chat-sell';
+                    if (m.username === CHAT_USER) cls += ' chat-me';
+                    var isBot = m.msg_type === 'bot' || (m.username && (
+                        ['BurgerKing','MeatMaverick','FryMaster','PattyFlipper','NuggetLord',
+                         'ShakeWizard','SauceBoss','CheeseQueen','GrillGod','BunRunner'].indexOf(m.username) >= 0));
+                    if (isBot) cls += ' chat-bot';
+                    html += '<div class="'+cls+'"><span class="who">'+esc(m.username)+':</span> '+esc(m.message)+'</div>';
+                }
+                if (html) {
+                    body.insertAdjacentHTML('beforeend', html);
+                    if (atBottom) body.scrollTop = body.scrollHeight;
+                }
+            });
+        }
+
+        function esc(s) {
+            var d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        pollChat();
+        setInterval(pollChat, 3000);
+    </script>
+    {% endif %}
 </body>
 </html>

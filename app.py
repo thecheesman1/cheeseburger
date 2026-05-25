@@ -94,6 +94,16 @@ def init_db():
         listed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(seller_id) REFERENCES users(id)
     )''')
+    db.execute('''CREATE TABLE IF NOT EXISTS chat_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        username TEXT NOT NULL,
+        message TEXT NOT NULL,
+        msg_type TEXT DEFAULT 'chat',
+        skin_id INTEGER,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )''')
     # Add is_bot column if missing
     try:
         db.execute('ALTER TABLE users ADD COLUMN is_bot INTEGER NOT NULL DEFAULT 0')
@@ -126,23 +136,69 @@ def get_skin(skin_id):
     return None
 
 def get_dynamic_price(skin, db_conn=None):
-    """Dynamic pricing based on supply/demand"""
+    """Dynamic pricing with trend cycles, velocity, and rarity desirability.
+
+    Five forces shape every price:
+      1. Base × rarity multiplier (classic floor)
+      2. Supply scarcity — more of this skin in circulation = cheaper
+      3. Trend cycle — each skin has a 5-15min trend window; if you're in it, +bonus
+      4. Sales velocity — skins that sold recently get a hype bump
+      5. Demand noise — small random jitter to prevent staleness
+    """
     base = skin['base_price']
     own_db = db_conn is None
     if own_db:
         db_conn = sqlite3.connect(DATABASE)
-    total = db_conn.execute(
+        db_conn.row_factory = sqlite3.Row
+
+    skin_id = skin['id']
+
+    # ── 1. Supply: how many exist in circulation ──
+    total_held = db_conn.execute(
         'SELECT COALESCE(SUM(quantity), 0) FROM user_inventory WHERE skin_id = ?',
-        (skin['id'],)
+        (skin_id,)
     ).fetchone()[0]
     listed = db_conn.execute(
         'SELECT COUNT(*) FROM market_listings WHERE skin_id = ?',
-        (skin['id'],)
+        (skin_id,)
     ).fetchone()[0]
-    rarity_mult = {'Common': 0.5, 'Uncommon': 1.0, 'Rare': 2.0, 'Epic': 4.0, 'Legendary': 8.0}[skin['rarity']]
-    scarcity = max(0.3, 1.0 - (total + listed) * 0.02)
-    demand_noise = random.uniform(0.85, 1.15)
-    price = int(base * rarity_mult * scarcity * demand_noise)
+    supply = total_held + listed
+
+    # ── 2. Rarity floor ──
+    rarity_mult = {
+        'Common': 0.5, 'Uncommon': 1.0, 'Rare': 2.0, 'Epic': 4.0, 'Legendary': 8.0
+    }[skin['rarity']]
+
+    # ── 3. Trend cycle (deterministic per skin, rotates every 5-15 min) ──
+    epoch = int(_time.time() / 300)  # 5-minute blocks
+    trend_seed = (skin_id * 17 + epoch * 31) % 100
+    trend_bonus = 1.0
+    if trend_seed < 15:       # 15% of skins are "hot" right now
+        trend_bonus = random.uniform(1.2, 2.0)
+    elif trend_seed < 35:     # 20% are "warm"
+        trend_bonus = random.uniform(1.05, 1.25)
+    elif trend_seed > 85:     # 15% are "cold"
+        trend_bonus = random.uniform(0.6, 0.85)
+
+    # ── 4. Sales velocity — recent transactions pump the price ──
+    try:
+        recent_sales = db_conn.execute(
+            "SELECT COUNT(*) FROM chat_messages WHERE msg_type = 'market_buy' AND skin_id = ? "
+            "AND created_at > ?",
+            (skin_id, int(_time.time()) - 600)
+        ).fetchone()[0]
+    except:
+        recent_sales = 0
+    velocity_bonus = 1.0 + min(recent_sales * 0.08, 0.6)  # cap at +60%
+
+    # ── 5. Scarcity curve — asymptotic floor at 0.3 ──
+    scarcity = max(0.3, 1.0 / (1.0 + supply * 0.015))
+
+    # ── 6. Noise ──
+    demand_noise = random.uniform(0.88, 1.12)
+
+    price = int(base * rarity_mult * scarcity * trend_bonus * velocity_bonus * demand_noise)
+
     if own_db:
         db_conn.close()
     return max(base // 2, price)
@@ -636,6 +692,12 @@ def market_buy(listing_id):
     db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (listing['price'], listing['seller_id']))
     db.execute('DELETE FROM market_listings WHERE id = ?', (listing_id,))
     add_skin_to_user(user['id'], listing['skin_id'])
+    # Log for velocity tracking
+    skin = get_skin(listing['skin_id'])
+    now = int(_time.time())
+    db.execute(
+        "INSERT INTO chat_messages (user_id, username, message, msg_type, skin_id, created_at) VALUES (?, ?, ?, 'market_buy', ?, ?)",
+        (user['id'], user['username'], f"snagged {skin['name']}" if skin else 'bought a skin', listing['skin_id'], now))
     db.commit()
     return redirect(url_for('market'))
 
@@ -702,6 +764,35 @@ def unequip_skin():
     return redirect(url_for('inventory'))
 
 # ── Leaderboard ─────────────────────────────────────────────────
+
+
+# ── Chat ─────────────────────────────────────────────────────────
+
+@app.route('/chat/messages')
+def chat_messages():
+    """Return latest 50 messages as JSON for the sidebar poll."""
+    db = get_db()
+    msgs = db.execute(
+        'SELECT id, username, message, msg_type, created_at FROM chat_messages '
+        'ORDER BY id DESC LIMIT 50'
+    ).fetchall()
+    return jsonify([dict(m) for m in reversed(msgs)])
+
+
+@app.route('/chat/send', methods=['POST'])
+@login_required
+def chat_send():
+    """Post a message to the global chat."""
+    user = get_user()
+    text = request.form.get('message', '').strip()
+    if not text or len(text) > 200:
+        return redirect(url_for('index'))
+    db = get_db()
+    db.execute(
+        'INSERT INTO chat_messages (user_id, username, message, msg_type, created_at) VALUES (?, ?, ?, ?, ?)',
+        (user['id'], user['username'], text, 'chat', int(_time.time())))
+    db.commit()
+    return redirect(url_for('index'))
 
 @app.route('/leaderboard')
 @login_required

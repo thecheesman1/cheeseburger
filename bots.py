@@ -169,6 +169,11 @@ def _send_bot_chat(db, bot, message):
     elif 'msg' in cols: val_map['msg'] = message
     elif 'content' in cols: val_map['content'] = message
 
+    if 'msg_type' in cols:
+        val_map['msg_type'] = 'bot'
+    elif 'type' in cols:
+        val_map['type'] = 'bot'
+
     if 'created_at' in cols: val_map['created_at'] = now
     elif 'timestamp' in cols: val_map['timestamp'] = now
     elif 'time' in cols: val_map['time'] = now
