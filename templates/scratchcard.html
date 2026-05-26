@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="game-box">
-<h2>🟨 Scratchcard</h2>
+<h2>🟨 Scratchcard <span class="badge">300x max</span></h2>
 {% if result.cards %}
 <div class="bet-result {{ 'win' if result.win else 'loss' }}">
   <div class="scratch-grid">{% for s in result.cards %}<span class="scratch-cell">{{ s }}</span>{% endfor %}</div>
-  <p>{{ result.matches }} matching → {{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,.0f}'.format(result.payout) }}</p>
+  {% if result.win %}<p>🎉 3 matches! {{ result.multiplier }}x → ${{ '{:,.0f}'.format(result.payout) }}</p>{% else %}<p>💀 No match. Lost ${{ '{:,.0f}'.format(result.bet_amount) }}</p>{% endif %}
 </div>
 {% endif %}
 <form method="POST">
@@ -13,7 +13,7 @@
   <input type="number" name="bet_amount" value="{{ MIN_BET }}" min="{{ MIN_BET }}" max="{{ user.balance }}" step="1000" required>
   <button type="submit" class="btn spin-btn">🟨 Scratch</button>
 </form>
-<p class="hint" style="text-align:center">3 match=2x | 4=5x | 5=10x | 6=25x | 7=50x | 8=100x | 9=500x</p>
+<p class="hint" style="text-align:center">3 matching = win! 🍔=10x 🍟=16x 🥤=25x ⭐=80x 💎=300x 💣=0x</p>
 </div>
-<style>.scratch-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:240px;margin:12px auto}.scratch-cell{background:#1a1a28;padding:16px;text-align:center;font-size:2rem;border-radius:8px;border:1px solid #2a2a3a;aspect-ratio:1;display:flex;align-items:center;justify-content:center}</style>
+<style>.scratch-grid{display:flex;gap:8px;justify-content:center;margin:12px 0}.scratch-cell{background:#1a1a28;padding:20px;font-size:2.5rem;border-radius:8px;border:1px solid #2a2a3a;width:70px;text-align:center}.bet-result.win .scratch-cell{background:#1a3a1a;border-color:#fbbf24}</style>
 {% endblock %}

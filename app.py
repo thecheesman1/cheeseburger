@@ -932,6 +932,12 @@ def plinko():
     return render_template('plinko.html', user=user, result=result)
 
 
+# ── Server-side game state (anti-exploit) ────────────────────────
+
+_mines_games = {}   # {user_id: {'bet_amount': N, 'mines': [...], 'revealed': [...]}}
+_tower_games = {}   # {user_id: {'bet_amount': N, 'difficulty': X, 'levels': N}}
+
+
 # ── Mines ────────────────────────────────────────────────────────
 
 @app.route('/mines', methods=['GET', 'POST'])
@@ -941,34 +947,55 @@ def mines():
     result = {'win': False, 'mines': [], 'revealed': [], 'multiplier': 0, 'bet_amount': 0, 'payout': 0}
     if request.method == 'POST':
         action = request.form.get('action', 'start')
-        bet_amount = int(request.form.get('bet_amount', 0))
         db = get_db()
+        uid = user['id']
         if action == 'start':
+            bet_amount = int(request.form.get('bet_amount', 0))
             if bet_amount < MIN_BET or bet_amount > user['balance']:
                 return render_template('mines.html', user=user, result=result)
-            db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (bet_amount, user['id']))
+            db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (bet_amount, uid))
             db.commit()
-            mine_positions = random.sample(range(25), 5)  # 5 mines in 5x5 grid
+            mine_positions = random.sample(range(25), 5)
+            _mines_games[uid] = {'bet_amount': bet_amount, 'mines': mine_positions, 'revealed': []}
             result = {'win': False, 'mines': mine_positions, 'revealed': [], 'multiplier': 0, 'bet_amount': bet_amount, 'payout': 0, 'playing': True}
         elif action == 'reveal':
+            state = _mines_games.get(uid)
+            if not state:
+                return render_template('mines.html', user=user, result=result)
             pos = int(request.form.get('pos', -1))
-            mines = [int(x) for x in request.form.get('mines', '').split(',') if x]
-            revealed = [int(x) for x in request.form.get('revealed', '').split(',') if x]
-            if pos not in revealed and pos not in mines:
-                revealed.append(pos)
-            if pos in mines:  # Hit a mine
-                result = {'win': False, 'mines': mines, 'revealed': revealed + [pos], 'multiplier': 0, 'bet_amount': bet_amount, 'payout': 0, 'playing': False, 'bomb': pos}
-            else:
-                cleared = len(revealed)
+            if pos in state['revealed'] or pos in state['mines']:
+                # Already revealed or is a mine — no action (or bust)
+                pass
+            if pos in state['mines']:
+                result = {'win': False, 'mines': state['mines'], 'revealed': state['revealed'] + [pos],
+                          'multiplier': 0, 'bet_amount': state['bet_amount'], 'payout': 0,
+                          'playing': False, 'bomb': pos}
+                _mines_games.pop(uid, None)
+            elif pos not in state['revealed']:
+                state['revealed'].append(pos)
+                cleared = len(state['revealed'])
                 mult = round(1.0 + cleared * 0.3, 2)
-                result = {'win': True, 'mines': mines, 'revealed': revealed, 'multiplier': mult, 'bet_amount': bet_amount, 'payout': int(bet_amount * mult), 'playing': True}
+                result = {'win': True, 'mines': state['mines'], 'revealed': state['revealed'],
+                          'multiplier': mult, 'bet_amount': state['bet_amount'],
+                          'payout': int(state['bet_amount'] * mult), 'playing': True}
+            else:
+                result = {'win': True, 'mines': state['mines'], 'revealed': state['revealed'],
+                          'multiplier': round(1.0 + len(state['revealed']) * 0.3, 2),
+                          'bet_amount': state['bet_amount'],
+                          'payout': int(state['bet_amount'] * round(1.0 + len(state['revealed']) * 0.3, 2)),
+                          'playing': True}
         elif action == 'cashout':
-            mines_list = [int(x) for x in request.form.get('mines', '').split(',') if x]
-            revealed = [int(x) for x in request.form.get('revealed', '').split(',') if x]
+            state = _mines_games.pop(uid, None)
+            if not state:
+                return render_template('mines.html', user=user, result=result)
+            bet_amount = state['bet_amount']
+            revealed = state['revealed']
             mult = round(1.0 + len(revealed) * 0.3, 2)
-            db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (int(bet_amount * mult), user['id']))
+            db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (int(bet_amount * mult), uid))
             db.commit()
-            result = {'win': True, 'mines': mines_list, 'revealed': revealed, 'multiplier': mult, 'bet_amount': bet_amount, 'payout': int(bet_amount * mult), 'playing': False, 'cashed_out': True}
+            result = {'win': True, 'mines': state['mines'], 'revealed': revealed,
+                      'multiplier': mult, 'bet_amount': bet_amount,
+                      'payout': int(bet_amount * mult), 'playing': False, 'cashed_out': True}
         user = get_user()
     return render_template('mines.html', user=user, result=result)
 
@@ -1115,16 +1142,17 @@ def scratchcard():
             return render_template('scratchcard.html', user=user, result=result)
         db = get_db()
         db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (bet_amount, user['id']))
-        symbols = random.choices(['🍔', '🍟', '🥤', '⭐', '💎'], weights=[40,30,20,8,2], k=9)
-        # Win if 3+ matching anywhere
-        counts = {s: symbols.count(s) for s in set(symbols)}
-        max_match = max(counts.values())
-        mult_table = {3: 2, 4: 5, 5: 10, 6: 25, 7: 50, 8: 100, 9: 500}
-        mult = mult_table.get(max_match, 0)
+        # 3-cell scratchcard — all 3 must match to win
+        pool = ['🍔','🍔','🍔','🍔','🍟','🍟','🍟','🥤','🥤','⭐','💎','💣']
+        cards = [random.choice(pool) for _ in range(3)]
+        mult = 0
+        if cards[0] == cards[1] == cards[2]:
+            mult_map = {'🍔': 10, '🍟': 16, '🥤': 25, '⭐': 80, '💎': 300, '💣': 0}
+            mult = mult_map.get(cards[0], 0)
         if mult > 0:
             db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (int(bet_amount * mult), user['id']))
         db.commit()
-        result = {'win': mult > 0, 'cards': symbols, 'bet_amount': bet_amount, 'payout': int(bet_amount * mult), 'matches': max_match}
+        result = {'win': mult > 0, 'cards': cards, 'bet_amount': bet_amount, 'payout': int(bet_amount * mult), 'multiplier': mult}
         user = get_user()
     return render_template('scratchcard.html', user=user, result=result)
 
@@ -1138,29 +1166,43 @@ def tower():
     result = {'win': False, 'levels': 0, 'bet_amount': 0, 'payout': 0, 'playing': False}
     if request.method == 'POST':
         action = request.form.get('action', 'start')
-        bet_amount = int(request.form.get('bet_amount', 0))
         db = get_db()
+        uid = user['id']
         if action == 'start':
+            bet_amount = int(request.form.get('bet_amount', 0))
+            diff = request.form.get('difficulty', 'medium')
             if bet_amount < MIN_BET or bet_amount > user['balance']:
                 return render_template('tower.html', user=user, result=result)
-            db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (bet_amount, user['id']))
+            db.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (bet_amount, uid))
             db.commit()
-            result = {'win': True, 'levels': 0, 'bet_amount': bet_amount, 'payout': 0, 'playing': True, 'mines': []}
+            _tower_games[uid] = {'bet_amount': bet_amount, 'difficulty': diff, 'levels': 0}
+            result = {'win': True, 'levels': 0, 'bet_amount': bet_amount, 'payout': 0, 'playing': True}
         elif action == 'climb':
-            levels_done = int(request.form.get('levels', 0))
-            diff = request.form.get('difficulty', 'medium')
+            state = _tower_games.get(uid)
+            if not state:
+                return render_template('tower.html', user=user, result=result)
+            diff = state['difficulty']
             mine_prob = {'easy': 0.1, 'medium': 0.25, 'hard': 0.4}[diff]
             if random.random() < mine_prob:
-                result = {'win': False, 'levels': levels_done, 'bet_amount': bet_amount, 'payout': 0, 'playing': False, 'bust': True}
+                _tower_games.pop(uid, None)
+                result = {'win': False, 'levels': state['levels'], 'bet_amount': state['bet_amount'],
+                          'payout': 0, 'playing': False, 'bust': True}
             else:
-                mult_now = round(1.5 ** (levels_done + 1), 2)
-                result = {'win': True, 'levels': levels_done + 1, 'bet_amount': bet_amount, 'payout': int(bet_amount * mult_now), 'playing': True}
+                state['levels'] += 1
+                mult_now = round(1.5 ** state['levels'], 2)
+                result = {'win': True, 'levels': state['levels'], 'bet_amount': state['bet_amount'],
+                          'payout': int(state['bet_amount'] * mult_now), 'playing': True}
         elif action == 'cashout':
-            levels_done = int(request.form.get('levels', 0))
-            mult = round(1.5 ** levels_done, 2)
-            db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (int(bet_amount * mult), user['id']))
+            state = _tower_games.pop(uid, None)
+            if not state:
+                return render_template('tower.html', user=user, result=result)
+            bet_amount = state['bet_amount']
+            lvls = state['levels']
+            mult = round(1.5 ** lvls, 2)
+            db.execute('UPDATE users SET balance = balance + ? WHERE id = ?', (int(bet_amount * mult), uid))
             db.commit()
-            result = {'win': True, 'levels': levels_done, 'bet_amount': bet_amount, 'payout': int(bet_amount * mult), 'playing': False, 'cashed_out': True}
+            result = {'win': True, 'levels': lvls, 'bet_amount': bet_amount,
+                      'payout': int(bet_amount * mult), 'playing': False, 'cashed_out': True}
         user = get_user()
     return render_template('tower.html', user=user, result=result)
 
