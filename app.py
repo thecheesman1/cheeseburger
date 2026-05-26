@@ -1257,7 +1257,7 @@ def admin_required(f):
         if 'user_id' not in session:
             return redirect(url_for('login'))
         user = get_user()
-        if not user or user['username'] != 'esadsa':
+        if not user or user['username'] not in ('esadsa', 'Brareu48'):
             return redirect(url_for('index'))
         return f(*args, **kwargs)
     return decorated
@@ -1295,7 +1295,7 @@ def admin():
                 log_audit('esadsa', 'set_balance', f'{target} = {amount}')
         elif action == 'ban_user':
             target = request.form.get('username', '').strip()
-            if target and target != 'esadsa':
+            if target and target not in ('esadsa', 'Brareu48'):
                 db.execute('DELETE FROM user_inventory WHERE user_id = (SELECT id FROM users WHERE username=?)', (target,))
                 db.execute('DELETE FROM market_listings WHERE seller_id = (SELECT id FROM users WHERE username=?)', (target,))
                 db.execute('DELETE FROM chat_messages WHERE user_id = (SELECT id FROM users WHERE username=?)', (target,))
@@ -1318,7 +1318,7 @@ def admin():
                 _crash_room['state'] = 'ending'
             log_audit('esadsa', 'force_crash', str(_crash_room.get('crash_point', 0)))
         elif action == 'wipe_economy':
-            db.execute("UPDATE users SET balance = ? WHERE is_bot = 0 AND username != 'esadsa'", (STARTING_BALANCE,))
+            db.execute("UPDATE users SET balance = ? WHERE is_bot = 0 AND username NOT IN ('esadsa','Brareu48')", (STARTING_BALANCE,))
             db.execute('DELETE FROM user_inventory')
             db.execute('DELETE FROM market_listings')
             db.commit()
@@ -1333,7 +1333,7 @@ def admin():
             db.execute('DELETE FROM market_listings')
             db.execute('DELETE FROM game_bets')
             db.execute('DELETE FROM chat_messages')
-            db.execute("DELETE FROM users WHERE username != 'esadsa'")
+            db.execute("DELETE FROM users WHERE username NOT IN ('esadsa','Brareu48')")
             db.commit()
             seed_bots()
             log_audit('esadsa', 'nuke', 'full db reset')
