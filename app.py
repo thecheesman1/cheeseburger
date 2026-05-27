@@ -105,7 +105,7 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
-        balance INTEGER NOT NULL DEFAULT 20000,
+        balance TEXT NOT NULL DEFAULT '20000',
         equipped_skin TEXT DEFAULT '',
         is_bot INTEGER NOT NULL DEFAULT 0
     )''')
@@ -196,7 +196,11 @@ def get_user():
     if 'user_id' not in session:
         return None
     db = get_db()
-    return db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    user = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    if user:
+        user = dict(user)
+        user['balance'] = int(user['balance'])
+    return user
 
 def get_skin(skin_id):
     for s in SKIN_CATALOG:
@@ -1244,8 +1248,10 @@ def leaderboard():
     user = get_user()
     db = get_db()
     top = db.execute(
-        'SELECT id, username, balance, is_bot FROM users ORDER BY balance DESC LIMIT 20'
+        'SELECT id, username, balance, is_bot FROM users ORDER BY CAST(balance AS REAL) DESC LIMIT 20'
     ).fetchall()
+    top = [dict(r) for r in top]
+    for r in top: r['balance'] = int(r['balance'])
     return render_template('leaderboard.html', user=user, top=top, colordict=RARITY_COLORS)
 
 # ── Admin Panel ──────────────────────────────────────────────────
@@ -1290,7 +1296,7 @@ def admin():
             target = request.form.get('username', '').strip()
             amount = int(request.form.get('amount', 0))
             if target and amount >= 0:
-                db.execute('UPDATE users SET balance = ? WHERE username = ?', (amount, target))
+                db.execute('UPDATE users SET balance = ? WHERE username = ?', (str(amount), target))
                 db.commit()
                 log_audit('esadsa', 'set_balance', f'{target} = {amount}')
         elif action == 'ban_user':
@@ -1305,7 +1311,7 @@ def admin():
         elif action == 'reset_bot':
             target = request.form.get('username', '').strip()
             if target:
-                db.execute('UPDATE users SET balance = ? WHERE username = ? AND is_bot = 1', (20000 + random.randint(5000, 100000), target))
+                db.execute('UPDATE users SET balance = ? WHERE username = ? AND is_bot = 1', (str(20000 + random.randint(5000, 100000)), target))
                 db.commit()
                 log_audit('esadsa', 'reset_bot', target)
         elif action == 'toggle_bots':
@@ -1318,7 +1324,7 @@ def admin():
                 _crash_room['state'] = 'ending'
             log_audit('esadsa', 'force_crash', str(_crash_room.get('crash_point', 0)))
         elif action == 'wipe_economy':
-            db.execute("UPDATE users SET balance = ? WHERE is_bot = 0 AND username NOT IN ('esadsa','Brareu48')", (STARTING_BALANCE,))
+            db.execute("UPDATE users SET balance = ? WHERE is_bot = 0 AND username NOT IN ('esadsa','Brareu48')", (str(STARTING_BALANCE),))
             db.execute('DELETE FROM user_inventory')
             db.execute('DELETE FROM market_listings')
             db.commit()
@@ -1340,12 +1346,16 @@ def admin():
 
     user = get_user()
     db.row_factory = sqlite3.Row
-    bots = db.execute('SELECT username, balance FROM users WHERE is_bot = 1 ORDER BY balance DESC').fetchall()
+    bots = db.execute('SELECT username, balance FROM users WHERE is_bot = 1 ORDER BY CAST(balance AS REAL) DESC').fetchall()
+    bots = [dict(r) for r in bots]
+    for r in bots: r['balance'] = int(r['balance'])
     total_users = db.execute('SELECT COUNT(*) as c FROM users').fetchone()['c']
     total_market = db.execute('SELECT COUNT(*) as c FROM market_listings').fetchone()['c']
     total_inventory = db.execute('SELECT COUNT(*) as c FROM user_inventory').fetchone()['c']
     total_chat = db.execute('SELECT COUNT(*) as c FROM chat_messages').fetchone()['c']
-    top_human = db.execute("SELECT username, balance FROM users WHERE is_bot = 0 ORDER BY balance DESC LIMIT 5").fetchall()
+    top_human = db.execute("SELECT username, balance FROM users WHERE is_bot = 0 ORDER BY CAST(balance AS REAL) DESC LIMIT 5").fetchall()
+    top_human = [dict(r) for r in top_human]
+    for r in top_human: r['balance'] = int(r['balance'])
 
     # House profit: total wagered - total paid out (all bets)
     wagered = db.execute("SELECT COALESCE(SUM(bet_amount), 0) as c FROM game_bets").fetchone()['c']
