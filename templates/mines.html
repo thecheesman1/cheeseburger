@@ -3,9 +3,11 @@
 <div class="game-box">
 <h2>💣 Mines</h2>
 {% if result.bomb is not none %}
-<div class="bet-result loss"><p>💥 BOOM! Hit a mine at position {{ result.bomb }}. Lost ${{ '{:,.0f}'.format(result.bet_amount) }}</p></div>
+<div class="bet-result loss" style="animation:resultPop 0.4s ease-out"><p>💥 BOOM! Hit a mine at position {{ result.bomb }}. Lost ${{ '{:,.0f}'.format(result.bet_amount) }}</p></div>
+<div class="mines-grid">{% for i in range(25) %}<div class="mine-cell {{ 'bomb' if i==result.bomb else 'revealed' if i in result.revealed else '' }}">{{ '💣' if i==result.bomb else '💎' if i in result.revealed else '?' }}</div>{% endfor %}</div>
 {% elif result.cashed_out %}
-<div class="bet-result win"><p>💰 Cashed out! {{ result.revealed|length }} gems × {{ result.multiplier }}x = ${{ '{:,.0f}'.format(result.payout) }}</p></div>
+<div class="bet-result win" style="animation:resultPop 0.4s ease-out"><p>💰 Cashed out! {{ result.revealed|length }} gems × {{ result.multiplier }}x = ${{ '{:,.0f}'.format(result.payout) }}</p></div>
+<div class="mines-grid">{% for i in range(25) %}<div class="mine-cell {{ 'revealed' if i in result.revealed else '' }}">{{ '💎' if i in result.revealed else '💣' }}</div>{% endfor %}</div>
 {% endif %}
 {% if not result.playing %}
 <form method="POST">
@@ -39,5 +41,5 @@
 </form>
 {% endif %}
 </div>
-<style>.mines-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;max-width:300px;margin:12px auto}.mine-cell{width:100%;aspect-ratio:1;font-size:1.5rem;background:#1a1a28;border:1px solid #2a2a3a;border-radius:6px;cursor:pointer}.mine-cell:hover{background:#2a2a3a}.mine-cell.revealed{background:#1a3a1a;border-color:#4ade80}.mine-cell:disabled{cursor:default}.cashout-btn{background:#4ade80;color:#111;font-weight:700;width:100%}</style>
+<style>.mines-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;max-width:300px;margin:12px auto}.mine-cell{width:100%;aspect-ratio:1;font-size:1.5rem;background:#1a1a28;border:1px solid #2a2a3a;border-radius:6px;cursor:pointer;transition:transform 0.2s,background 0.3s}.mine-cell:hover{background:#2a2a3a;transform:scale(1.05)}.mine-cell.revealed{background:#1a3a1a;border-color:#4ade80;animation:gemPop 0.3s ease-out}.mine-cell.bomb{background:#3a1a1a;border-color:#ef4444;animation:bombShake 0.5s ease-out}.mine-cell:disabled{cursor:default}@keyframes gemPop{0%{transform:scale(0.5)}50%{transform:scale(1.2)}100%{transform:scale(1)}}@keyframes bombShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}@keyframes resultPop{0%{opacity:0;transform:scale(0.3)}60%{transform:scale(1.15)}100%{opacity:1;transform:scale(1)}}.cashout-btn{background:#4ade80;color:#111;font-weight:700;width:100%}</style>
 {% endblock %}

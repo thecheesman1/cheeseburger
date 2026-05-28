@@ -3,8 +3,8 @@
 <div class="game-box">
 <h2>🚀 Limbo</h2>
 {% if result.rolled is not none %}
-<div class="bet-result {{ 'win' if result.win else 'loss' }}">
-  <div class="limbo-display"><span class="big-num">{{ result.rolled }}x</span></div>
+<div class="bet-result {{ 'win' if result.win else 'loss' }}" id="limboResult" style="animation:limboPop 0.5s ease-out">
+  <div class="limbo-display"><span class="big-num counter" id="limboCounter">1.00x</span></div>
   <p>Target: {{ result.target }}x → {{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,.0f}'.format(result.payout) }}</p>
 </div>
 {% endif %}
@@ -16,5 +16,22 @@
   <button type="submit" class="btn spin-btn">🚀 Launch</button>
 </form>
 </div>
-<style>.limbo-display{text-align:center;padding:16px}.big-num{font-size:3rem;font-weight:900;color:#ffd700}</style>
+<style>
+.limbo-display{text-align:center;padding:16px}
+.big-num{font-size:3rem;font-weight:900;color:#ffd700}
+@keyframes limboPop{0%{opacity:0;transform:translateY(20px)}100%{opacity:1;transform:translateY(0)}}
+</style>
+{% if result.rolled is not none %}
+<script>
+(function(){
+  var el=document.getElementById('limboCounter'),tgt={{ result.rolled }},dur=800,steps=20,i=0;
+  var iv=setInterval(function(){
+    i++; var p=i/steps,val=(1+(tgt-1)*Math.pow(p,2)).toFixed(2);
+    el.textContent=val+'x';
+    el.style.color=p>0.7&&tgt<2?'#ef4444':p>0.7&&tgt>=5?'#4ade80':'#ffd700';
+    if(i>=steps){el.textContent=tgt+'x';clearInterval(iv)}
+  },dur/steps)
+})();
+</script>
+{% endif %}
 {% endblock %}

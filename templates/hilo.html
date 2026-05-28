@@ -3,8 +3,12 @@
 <div class="game-box">
 <h2>🃏 Hi-Lo</h2>
 {% if result.cards %}
-<div class="bet-result {{ 'win' if result.win else 'loss' }}">
-  <div class="card-row"><span class="card">{{ result.cards[0] }}</span><span class="vs">vs</span><span class="card">{{ result.cards[1] }}</span></div>
+<div class="bet-result {{ 'win' if result.win else 'loss' }}" style="animation:resultPop 0.4s ease-out">
+  <div class="card-row">
+    <span class="card flip-in">{{ result.cards[0] }}</span>
+    <span class="vs">vs</span>
+    <span class="card flip-in" style="animation-delay:0.2s">{{ result.cards[1] }}</span>
+  </div>
   <p>{{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,.0f}'.format(result.payout) }}</p>
 </div>
 {% endif %}
@@ -17,5 +21,12 @@
   </div>
 </form>
 </div>
-<style>.card-row{display:flex;align-items:center;justify-content:center;gap:12px;font-size:2rem}.card{background:#1a1a28;border:2px solid #ffd700;border-radius:8px;padding:12px 20px;font-weight:700}.vs{font-size:1rem;color:#888}</style>
+<style>
+.card-row{display:flex;align-items:center;justify-content:center;gap:12px;font-size:2rem}
+.card{background:#1a1a28;border:2px solid #ffd700;border-radius:8px;padding:12px 20px;font-weight:700}
+.vs{font-size:1rem;color:#888}
+.flip-in{animation:cardFlip 0.4s ease-out both}
+@keyframes cardFlip{0%{opacity:0;transform:rotateY(90deg) scale(0.5)}100%{opacity:1;transform:rotateY(0) scale(1)}}
+@keyframes resultPop{0%{opacity:0;transform:scale(0.3)}60%{transform:scale(1.15)}100%{opacity:1;transform:scale(1)}}
+</style>
 {% endblock %}

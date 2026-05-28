@@ -3,9 +3,16 @@
 <div class="game-box">
 <h2>🎡 Roulette <span class="badge">35x max</span></h2>
 {% if result.number is not none %}
-<div class="bet-result {{ 'win' if result.win else 'loss' }}">
-  <div class="roulette-ball" style="background:{{ result.color }}">{{ result.number }}</div>
-  <p>{{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,.0f}'.format(result.payout) }}</p>
+<div class="roulette-stage" id="rouletteStage">
+  <div class="roulette-wheel">
+    <div class="wheel-outer"></div>
+    <div class="wheel-inner"></div>
+    <div class="wheel-ball" style="--ball-color:{{ result.color }}"></div>
+  </div>
+  <div class="bet-result reveal {{ 'win' if result.win else 'loss' }}" id="rouletteResult">
+    <div class="roulette-ball-result" style="background:{{ result.color }}">{{ result.number }}</div>
+    <p>{{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,.0f}'.format(result.payout) }}</p>
+  </div>
 </div>
 {% endif %}
 <form method="POST">
@@ -31,6 +38,21 @@
   <button type="submit" class="btn spin-btn">🎡 Spin</button>
 </form>
 </div>
-<style>.roulette-ball{width:60px;height:60px;border-radius:50%;margin:12px auto;font-size:28px;font-weight:700;line-height:60px;text-align:center;border:3px solid #fff3}.bet-select{width:100%;padding:8px;background:#1a1a28;color:#ddd;border:1px solid #2a2a3a;border-radius:4px;margin:8px 0}</style>
+<style>
+.roulette-stage{display:flex;flex-direction:column;align-items:center;gap:16px;min-height:200px}
+.roulette-wheel{position:relative;width:160px;height:160px;margin:0 auto}
+.wheel-outer{width:100%;height:100%;border-radius:50%;background:conic-gradient(#c0392b 0 18deg,#2c3e50 18deg 36deg,#c0392b 36deg 54deg,#2c3e50 54deg 72deg,#c0392b 72deg 90deg,#2c3e50 90deg 108deg,#c0392b 108deg 126deg,#2c3e50 126deg 144deg,#c0392b 144deg 162deg,#2c3e50 162deg 180deg,#c0392b 180deg 198deg,#2c3e50 198deg 216deg,#c0392b 216deg 234deg,#2c3e50 234deg 252deg,#c0392b 252deg 270deg,#2c3e50 270deg 288deg,#c0392b 288deg 306deg,#2c3e50 306deg 324deg,#c0392b 324deg 342deg,#2c3e50 342deg 360deg);border:4px solid #d4af37;box-shadow:0 0 30px rgba(212,175,55,0.3),inset 0 0 20px rgba(0,0,0,0.5)}
+.wheel-inner{position:absolute;top:50%;left:50%;width:50px;height:50px;margin:-25px 0 0 -25px;border-radius:50%;background:radial-gradient(circle,#1a1a28,#0d0d1a);border:3px solid #d4af37}
+.wheel-ball{position:absolute;top:8px;left:50%;width:16px;height:16px;margin-left:-8px;border-radius:50%;background:var(--ball-color,#fff);box-shadow:0 0 8px var(--ball-color,#fff);z-index:2}
+{% if result.number is not none %}
+.wheel-outer{animation:wheelSpin 0.8s ease-out}
+.wheel-ball{animation:ballBounce 0.8s ease-out}
+.bet-result.reveal{animation:resultPop 0.4s 0.8s both}
+@keyframes wheelSpin{0%{transform:rotate(0deg)}100%{transform:rotate(720deg)}}
+@keyframes ballBounce{0%{top:8px;left:50%}30%{top:120px;left:30%}60%{top:20px;left:70%}100%{top:var(--ball-land,72px);left:50%}}
+@keyframes resultPop{0%{opacity:0;transform:scale(0.3)}60%{transform:scale(1.15)}100%{opacity:1;transform:scale(1)}}
+{% endif %}
+.roulette-ball-result{width:60px;height:60px;border-radius:50%;margin:12px auto;font-size:28px;font-weight:700;line-height:60px;text-align:center;border:3px solid #fff3}.bet-select{width:100%;padding:8px;background:#1a1a28;color:#ddd;border:1px solid #2a2a3a;border-radius:4px;margin:8px 0}
+</style>
 <script>function toggleNumber(v){document.getElementById('number-pick').style.display=v==='number'?'block':'none';document.getElementById('dozen-pick').style.display=v==='dozen'?'block':'none'}</script>
 {% endblock %}

@@ -3,9 +3,15 @@
 <div class="game-box">
 <h2>🎡 Wheel of Fortune</h2>
 {% if result.segment is not none %}
-<div class="bet-result {{ 'win' if result.win else 'loss' }}">
-  <div class="wheel-segment">{{ result.segment_emoji }} {{ result.multiplier }}x</div>
-  <p>{{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,.0f}'.format(result.payout) }}</p>
+<div class="wheel-stage" id="wheelStage">
+  <div class="wheel-spin">
+    <div class="wheel-pointer">▼</div>
+    <div class="wheel-disc" id="wheelDisc"></div>
+  </div>
+  <div class="bet-result reveal {{ 'win' if result.win else 'loss' }}" id="wheelResult">
+    <div class="wheel-segment">{{ result.segment_emoji }} {{ result.multiplier }}x</div>
+    <p>{{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,.0f}'.format(result.payout) }}</p>
+  </div>
 </div>
 {% endif %}
 <form method="POST">
@@ -20,5 +26,17 @@
   <span>🧊 0.5x</span><span>🍔 1.5x</span><span>🍟 1.2x</span><span>🥤 1x</span><span>💣 0x</span>
 </div>
 </div>
-<style>.wheel-segments{display:flex;flex-wrap:wrap;gap:4px;max-width:400px;margin:12px auto;justify-content:center}.wheel-segments span{background:#1a1a28;padding:4px 8px;border-radius:4px;font-size:.75rem;border:1px solid #2a2a3a}.wheel-segment{font-size:2rem;text-align:center;padding:12px}</style>
+<style>
+.wheel-stage{display:flex;flex-direction:column;align-items:center;gap:12px;min-height:180px}
+.wheel-spin{position:relative;width:160px;height:160px;margin:0 auto}
+.wheel-pointer{position:absolute;top:-14px;left:50%;margin-left:-10px;font-size:20px;z-index:3;color:#ffd700;filter:drop-shadow(0 0 4px #ffd700)}
+.wheel-disc{width:100%;height:100%;border-radius:50%;background:conic-gradient(#fbbf24 0 18deg,#f97316 18deg 36deg,#ef4444 36deg 54deg,#a855f7 54deg 72deg,#4ade80 72deg 90deg,#60a5fa 90deg 108deg,#fbbf24 108deg 126deg,#f97316 126deg 144deg,#ef4444 144deg 162deg,#a855f7 162deg 180deg,#4ade80 180deg 198deg,#60a5fa 198deg 216deg,#fbbf24 216deg 234deg,#f97316 234deg 252deg,#ef4444 252deg 270deg,#a855f7 270deg 288deg,#4ade80 288deg 306deg,#60a5fa 306deg 324deg,#fbbf24 324deg 342deg,#ef4444 342deg 360deg);border:4px solid #d4af37;box-shadow:0 0 30px rgba(212,175,55,0.3)}
+{% if result.segment is not none %}
+.wheel-disc{animation:wheelSpin 1.2s cubic-bezier(0.2,0.8,0.3,1)}
+.bet-result.reveal{animation:resultPop 0.4s 1.2s both}
+@keyframes wheelSpin{0%{transform:rotate(0deg)}100%{transform:rotate(1080deg)}}
+@keyframes resultPop{0%{opacity:0;transform:scale(0.3)}60%{transform:scale(1.15)}100%{opacity:1;transform:scale(1)}}
+{% endif %}
+.wheel-segments{display:flex;flex-wrap:wrap;gap:4px;max-width:400px;margin:12px auto;justify-content:center}.wheel-segments span{background:#1a1a28;padding:4px 8px;border-radius:4px;font-size:.75rem;border:1px solid #2a2a3a}.wheel-segment{font-size:2rem;text-align:center;padding:12px}
+</style>
 {% endblock %}

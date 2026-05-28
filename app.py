@@ -6,10 +6,16 @@ import bcrypt
 import threading
 import time as _time
 from flask import Flask, render_template, request, redirect, url_for, session, g, jsonify
-from bots import bot_thread, seed_bots, admin_settings, BOT_NAMES, roll_skin_from_crate
+from bots import bot_thread, seed_bots, admin_settings, BOT_NAMES, roll_skin_from_crate, pulse_human
 
 app = Flask(__name__)
 app.secret_key = 'cheeseburger-secret-key-change-in-production'
+
+@app.before_request
+def _track_human():
+    """Pulse on every real page load / action, but skip chat polling."""
+    if request.path != '/chat/messages':
+        pulse_human()
 DATABASE = 'cheeseburger.db'
 
 MIN_BET = 10000

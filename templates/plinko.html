@@ -3,8 +3,14 @@
 <div class="game-box">
 <h2>🟢 Plinko</h2>
 {% if result.slot is not none %}
-<div class="bet-result {{ 'win' if result.win else 'loss' }}">
-  <div class="plinko-result">Slot <b>#{{ result.slot }}</b> → {{ result.payout }} coins ({{ result.risk }} risk)</div>
+<div class="plinko-stage" id="plinkoStage">
+  <div class="plinko-canvas" id="plinkoCanvas">
+    {% for row in range(8) %}{% for col in range(9) %}<div class="peg" style="left:{{ 10+col*10 }}%;top:{{ 10+row*11 }}%"></div>{% endfor %}{% endfor %}
+    <div class="plinko-ball" id="plinkoBall" style="--slot:{{ result.slot }}"></div>
+  </div>
+  <div class="bet-result reveal {{ 'win' if result.win else 'loss' }}" id="plinkoResult">
+    <div class="plinko-result">Slot <b>#{{ result.slot }}</b> → {{ result.payout }} coins ({{ result.risk }} risk)</div>
+  </div>
 </div>
 {% endif %}
 <form method="POST">
@@ -22,5 +28,17 @@
   {% for i in range(10) %}<div class="plinko-slot">{{ ['0.5x','1x','1.5x','2x','3x','3x','2x','1.5x','1x','0.5x'][i] }}</div>{% endfor %}
 </div>
 </div>
-<style>.plinko-board{display:flex;gap:4px;margin-top:12px;justify-content:center}.plinko-slot{background:#1a1a28;padding:6px 10px;border-radius:4px;font-size:.75rem;border:1px solid #2a2a3a}.plinko-result{font-size:1.2rem;padding:12px}</style>
+<style>
+.plinko-stage{display:flex;flex-direction:column;align-items:center;gap:12px;min-height:220px}
+.plinko-canvas{position:relative;width:300px;height:240px;background:linear-gradient(180deg,#1a1a28,#0d0d1a);border-radius:8px;overflow:hidden;border:2px solid #2a2a3a;margin:0 auto}
+.peg{position:absolute;width:8px;height:8px;border-radius:50%;background:#555;transform:translate(-50%,-50%)}
+.plinko-ball{position:absolute;top:0;left:50%;width:16px;height:16px;margin-left:-8px;border-radius:50%;background:#4ade80;box-shadow:0 0 12px #4ade80;z-index:2}
+{% if result.slot is not none %}
+.plinko-ball{animation:plinkoDrop 1s ease-in both}
+.bet-result.reveal{animation:resultPop 0.4s 1s both}
+@keyframes plinkoDrop{0%{top:4%;left:50%}20%{top:14%;left:35%}35%{top:24%;left:60%}50%{top:34%;left:45%}65%{top:45%;left:55%}80%{top:55%;left:40%}90%{top:65%;left:48%}95%{top:75%;left:calc(5% + var(--slot)*10%))}100%{top:92%;left:calc(5% + var(--slot)*10%))}}
+@keyframes resultPop{0%{opacity:0;transform:scale(0.3)}60%{transform:scale(1.15)}100%{opacity:1;transform:scale(1)}}
+{% endif %}
+.plinko-board{display:flex;gap:4px;margin-top:12px;justify-content:center}.plinko-slot{background:#1a1a28;padding:6px 10px;border-radius:4px;font-size:.75rem;border:1px solid #2a2a3a}.plinko-result{font-size:1.2rem;padding:12px}
+</style>
 {% endblock %}

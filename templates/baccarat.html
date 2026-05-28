@@ -3,10 +3,10 @@
 <div class="game-box">
 <h2>🃏 Baccarat</h2>
 {% if result.bet_on %}
-<div class="bet-result {{ 'win' if result.win else 'loss' }}">
+<div class="bet-result {{ 'win' if result.win else 'loss' }}" style="animation:resultPop 0.4s ease-out">
   <div style="display:flex;justify-content:space-around;gap:20px">
-    <div><b>Player</b> ({{ result.player_total }})<br><span class="card-small">{{ result.player_cards|join(' ') }}</span></div>
-    <div><b>Banker</b> ({{ result.banker_total }})<br><span class="card-small">{{ result.banker_cards|join(' ') }}</span></div>
+    <div class="baccarat-hand player"><b>Player</b> ({{ result.player_total }})<br><span class="card-small">{% for c in result.player_cards %}<span class="card-deal">{{ c }}</span>{% endfor %}</span></div>
+    <div class="baccarat-hand banker"><b>Banker</b> ({{ result.banker_total }})<br><span class="card-small">{% for c in result.banker_cards %}<span class="card-deal">{{ c }}</span>{% endfor %}</span></div>
   </div>
   <p>Bet on <b>{{ result.bet_on }}</b> → {{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,.0f}'.format(result.payout) }}</p>
 </div>
@@ -21,5 +21,12 @@
   </div>
 </form>
 </div>
-<style>.card-small{font-size:1.2rem;letter-spacing:2px}</style>
+<style>
+.card-small{font-size:1.2rem;letter-spacing:2px}
+.card-deal{display:inline-block;animation:cardSlide 0.3s ease-out}
+.card-deal:nth-child(2){animation-delay:0.15s}
+.card-deal:nth-child(3){animation-delay:0.3s}
+@keyframes cardSlide{0%{opacity:0;transform:translateY(-20px) rotate(-10deg)}100%{opacity:1;transform:translateY(0) rotate(0)}}
+@keyframes resultPop{0%{opacity:0;transform:scale(0.3)}60%{transform:scale(1.15)}100%{opacity:1;transform:scale(1)}}
+</style>
 {% endblock %}

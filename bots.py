@@ -46,6 +46,18 @@ admin_settings = dict(crash_house_edge=0.05,market_tax_pct=0.05,bot_count=40,
     bot_aggression='medium',min_bet=10000,starting_balance=20000,
     crate_discount_pct=0,event_mode='normal',maintenance_mode=False)
 
+# ── Sleep system: bots go quiet when no humans are around ──
+_last_human_pulse = 0
+
+def pulse_human():
+    """Called from Flask when a real human loads a page, plays a game, or sends chat."""
+    global _last_human_pulse
+    _last_human_pulse = _time.time()
+
+def _humans_awake():
+    """True if a human has been active in the last 30 seconds."""
+    return (_time.time() - _last_human_pulse) < 30
+
 DATABASE=None; MIN_BET=10000; STARTING_BALANCE=20000; CRATE_TYPES={}; SKIN_CATALOG=[]
 _crash_room=None; _get_multiplier=lambda:1.0; get_skin=lambda s:None
 roll_skin_from_crate=lambda c:None; get_dynamic_price=lambda s,d:s['base_price']
@@ -91,6 +103,7 @@ def _get_activity_multiplier():
 def _send_bot_chat(db,bot,msg):
     global _chat_table_info
     if _chat_table_info is False: return
+    if not _humans_awake(): return  # 🤫 nobody's watching
     now=int(_time.time())
     s=BOT_STATES.get(bot['id'])
     if s and now-s.get('last_chat_time',0)<6: return
@@ -123,7 +136,7 @@ def _llm_chat(bot_name, persona, context, temperature=0.9, max_tokens=50):
     try:
         now=_time.time()
         if LLM_COOLDOWN.get(bot_name,0)>now: return None
-        LLM_COOLDOWN[bot_name]=now+8
+        LLM_COOLDOWN[bot_name]=now+14  # 14s — 2-thread server, don't flood
         s=BOT_STATES.get(next((b['id'] for b in [] if b.get('username')==bot_name),None)) or {}
         mood_emoji = s.get('emoji_mood','')
         payload=_json.dumps(dict(
@@ -193,6 +206,10 @@ def bot_thread():
     while True:
         try:
             if not admin_settings.get('bots_enabled',True): _time.sleep(5); continue
+            awake = _humans_awake()
+            if not awake:
+                _time.sleep(random.uniform(4, 8))  # sleep mode — save CPU
+                continue
             db=sqlite3.connect(DATABASE); db.row_factory=sqlite3.Row
             if random.random()>_get_activity_multiplier(): db.close(); _time.sleep(random.uniform(2,5)); continue
             bots=db.execute("SELECT id,username,balance FROM users WHERE is_bot=1").fetchall()
@@ -237,7 +254,7 @@ def bot_thread():
             # ── Global events & chat ──
             _diurnal_event(db,bots)
             if random.random()<0.02: _bot_global_chat(db,bots)
-            if random.random()<0.40: _bot_respond_to_users(db,bots)
+            if random.random()<0.10: _bot_respond_to_users(db,bots)  # 2-thread server friendly
 
             # Track session stats per bot
             for bot in bots:
@@ -250,6 +267,9 @@ def bot_thread():
 
             db.close()
         except Exception as e:
+            import traceback
+            with open('/tmp/bot_error.log','a') as f:
+                f.write(f'{_time.time()}: {e}\n{traceback.format_exc()}\n')
             try: db.close()
             except: pass
         _time.sleep(random.uniform(0.8,2.0))
@@ -336,9 +356,10 @@ def _bot_play_crash(db,bots):
             elif p=='Degenerate': bet=random.randint(bal//3,bal//2) if mood=='tilted' else random.randint(bal//6,bal//3)
             elif p=='PvPer': bet=random.randint(min(bal//5,60000),min(bal//3,150000))
             elif p=='TrendChaser': bet=random.randint(min(bal//6,30000),min(bal//3,100000))
-            elif p=='Grinder': bet=random.randint(MIN_BET,min(bal//12,30000))
-            else: bet=random.randint(MIN_BET,min(bal//6,50000))
+            elif p=='Grinder': bet=random.randint(MIN_BET, max(MIN_BET, min(bal//12,30000)))
+            else: bet=random.randint(MIN_BET, max(MIN_BET, min(bal//6,50000)))
             bet=max(MIN_BET,min(bet,bal))
+            if bet<=0: continue
             tgt=1.5
             if p=='SystemPlayer': tgt=2.0
             elif p=='Grinder': tgt=random.uniform(1.15,1.5)
@@ -422,7 +443,7 @@ def _bot_play_slots(db,bots):
         s=BOT_STATES[bot['id']]; p=s['personality']; bal=bot['balance']
         prob={'Degenerate':0.45,'PvPer':0.3,'Whale':0.25}.get(p,0.1)
         if random.random()<prob and bal>=MIN_BET:
-            bet=max(MIN_BET,min(random.randint(MIN_BET*2 if p=='Whale' else MIN_BET,min(bal//6,100000)),bal))
+            bet=max(MIN_BET,min(random.randint(MIN_BET*2 if p=='Whale' else MIN_BET, max(MIN_BET*2 if p=='Whale' else MIN_BET, min(bal//6,100000))),bal))
             roll=random.random()
             if roll<0.62: w=0
             elif roll<0.87: w=int(bet*random.uniform(0.5,1.5))
@@ -436,7 +457,7 @@ def _bot_play_blackjack(db,bots):
         s=BOT_STATES[bot['id']]; p=s['personality']; bal=bot['balance']
         prob={'SystemPlayer':0.35,'Grinder':0.3,'Whale':0.2}.get(p,0.08)
         if random.random()<prob and bal>=MIN_BET:
-            bet=max(MIN_BET,min(random.randint(MIN_BET,min(bal//8,60000)) if p!='Whale' else random.randint(MIN_BET*2,min(bal//5,150000)),bal))
+            bet=max(MIN_BET,min(random.randint(MIN_BET, max(MIN_BET, min(bal//8,60000))) if p!='Whale' else random.randint(MIN_BET*2, max(MIN_BET*2, min(bal//5,150000))),bal))
             roll=random.random()
             if roll<0.45: w=0
             elif roll<0.53: w=bet
@@ -451,7 +472,7 @@ def _bot_play_dice(db,bots):
         s=BOT_STATES[bot['id']]; p=s['personality']; bal=bot['balance']
         prob={'Degenerate':0.35,'PvPer':0.25}.get(p,0.06)
         if random.random()<prob and bal>=MIN_BET:
-            bet=max(MIN_BET,min(random.randint(MIN_BET,min(bal//10,50000)),bal))
+            bet=max(MIN_BET,min(random.randint(MIN_BET, max(MIN_BET, min(bal//10,50000))),bal))
             won=random.randint(1,6)==random.randint(1,6); pay=bet*6 if won else 0
             db.execute('UPDATE users SET balance=balance+? WHERE id=?',(pay-bet,bot['id'])); db.commit()
 
@@ -462,7 +483,7 @@ def _bot_play_roulette(db,bots):
         s=BOT_STATES[bot['id']]; p=s['personality']; bal=bot['balance']
         prob={'Whale':0.25,'Degenerate':0.2,'PvPer':0.2}.get(p,0.06)
         if random.random()<prob and bal>=MIN_BET:
-            bet=max(MIN_BET,min(random.randint(MIN_BET,min(bal//6,100000)),bal))
+            bet=max(MIN_BET,min(random.randint(MIN_BET, max(MIN_BET, min(bal//6,100000))),bal))
             btype=random.choices(['red','black','green'],weights=[4,4,1],k=1)[0]
             num=random.randint(0,36)
             color='green' if num==0 else 'red' if num in RED else 'black'
@@ -490,7 +511,7 @@ def _bot_play_limbo(db,bots):
         s=BOT_STATES[bot['id']]; p=s['personality']; bal=bot['balance']
         prob={'Degenerate':0.3,'PvPer':0.2,'Whale':0.15}.get(p,0.06)
         if random.random()<prob and bal>=MIN_BET:
-            bet=max(MIN_BET,min(random.randint(MIN_BET,min(bal//8,80000)),bal))
+            bet=max(MIN_BET,min(random.randint(MIN_BET, max(MIN_BET, min(bal//8,80000))),bal))
             tgt=random.uniform(5,50) if p=='Degenerate' else random.uniform(1.5,4) if p=='Whale' else random.uniform(3,15) if p=='PvPer' else random.uniform(1.3,8)
             won=random.uniform(1,100)>=tgt; pay=int(bet*tgt) if won else 0
             db.execute('UPDATE users SET balance=balance+? WHERE id=?',(pay-bet,bot['id'])); db.commit()
@@ -502,11 +523,11 @@ def _bot_global_chat(db,bots):
     _update_mood(s,bal)
 
     # 25% chance: LLM-generated contextual chat
+    pm2={'Whale':'a rich whale with deep pockets','Degenerate':'an unhinged degen gambler',
+        'Merchant':'a crafty skin trader','SystemPlayer':'a cold math nerd',
+        'PvPer':'a toxic competitive trashtalker','TrendChaser':'a chart-obsessed analyst',
+        'Grinder':'a patient, methodical grinder'}
     if random.random()<0.25:
-        pm2={'Whale':'a rich whale with deep pockets','Degenerate':'an unhinged degen gambler',
-            'Merchant':'a crafty skin trader','SystemPlayer':'a cold math nerd',
-            'PvPer':'a toxic competitive trashtalker','TrendChaser':'a chart-obsessed analyst',
-            'Grinder':'a patient, methodical grinder'}
         triggers=['lobby vibes','recent big win','recent brutal loss','market trend spotted','calling out a rival']
         persona=pm2.get(p,'a hungry gambler')
         llm=_llm_chat(bot['username'],persona,
@@ -737,7 +758,8 @@ def _bot_alliance_chat(db,bot,bots):
     online_allies=[b for b in bots if b['username'] in allies and b['username']!=name]
     if not online_allies or random.random()>0.15: return
     ally=random.choice(online_allies)
-    p=s['personality']
+    if bot['id'] not in BOT_STATES: BOT_STATES[bot['id']]=_init_bot_state(bot['id'],bot['username'])
+    p=BOT_STATES[bot['id']]['personality']
     persona={'Whale':'a rich whale','Degenerate':'a degen gambler',
         'Merchant':'a skin trader','SystemPlayer':'a math nerd',
         'PvPer':'a trashtalker','TrendChaser':'a chart analyst',
@@ -880,16 +902,15 @@ def _bot_respond_to_users(db,bots):
                 f'Reply in character. One short sentence. Be funny.')
             if llm:
                 _send_bot_chat(db,bot,llm)
-            else:
-                _send_bot_chat(db,bot,f"@{m['username']} yo, what's up?")
+            # no "yo, what's up?" — if LLM busy, stay quiet
 
-    # Phase 2: 1-3 random bots reply to any user message
-    responders=random.sample(bots,min(random.randint(1,3),len(bots)))
+    # Phase 2: 1-2 random bots reply to any user message
+    responders=random.sample(bots,min(random.randint(1,2),len(bots)))
     for bot in responders:
         if bot['id'] not in BOT_STATES: BOT_STATES[bot['id']]=_init_bot_state(bot['id'],bot['username'])
         s=BOT_STATES[bot['id']]; p=s['personality']
 
-        if random.random()>0.55: continue
+        if random.random()>0.35: continue  # only 35% of selected bots actually reply
 
         msg=random.choice(msgs)
         if msg['username'] in BOT_NAMES: continue
@@ -901,4 +922,4 @@ def _bot_respond_to_users(db,bots):
         llm=_llm_chat(bot['username'],persona,
             f'@{msg["username"]} just said: "{msg["message"]}". Reply to them in character. One short sentence.')
         if llm: _send_bot_chat(db,bot,llm)
-        else: _send_bot_chat(db,bot,f"@{msg['username']} hey")
+        # no "hey" fallback — if LLM is busy, stay quiet
