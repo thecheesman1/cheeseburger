@@ -208,8 +208,15 @@ def get_user():
     user = db.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
     if user:
         user = dict(user)
-        user['balance'] = int(user['balance'])
+        user['balance'] = _safe_int(user['balance'])
     return user
+
+def _safe_int(bal):
+    """Convert balance to int, handling sci notation like 2.3e+49."""
+    try: return int(bal)
+    except (ValueError, TypeError):
+        try: return int(float(bal))
+        except: return bal
 
 def get_skin(skin_id):
     for s in SKIN_CATALOG:
@@ -1260,7 +1267,7 @@ def leaderboard():
         'SELECT id, username, balance, is_bot FROM users ORDER BY LENGTH(balance) DESC, balance DESC LIMIT 20'
     ).fetchall()
     top = [dict(r) for r in top]
-    for r in top: r['balance'] = int(r['balance'])
+    for r in top: r['balance'] = _safe_int(r['balance'])
     return render_template('leaderboard.html', user=user, top=top, colordict=RARITY_COLORS)
 
 # ── Admin Panel ──────────────────────────────────────────────────
@@ -1357,14 +1364,14 @@ def admin():
     db.row_factory = sqlite3.Row
     bots = db.execute('SELECT username, balance, LENGTH(balance) as blen FROM users WHERE is_bot = 1 ORDER BY blen DESC, balance DESC').fetchall()
     bots = [dict(r) for r in bots]
-    for r in bots: r['balance'] = int(r['balance'])
+    for r in bots: r['balance'] = _safe_int(r['balance'])
     total_users = db.execute('SELECT COUNT(*) as c FROM users').fetchone()['c']
     total_market = db.execute('SELECT COUNT(*) as c FROM market_listings').fetchone()['c']
     total_inventory = db.execute('SELECT COUNT(*) as c FROM user_inventory').fetchone()['c']
     total_chat = db.execute('SELECT COUNT(*) as c FROM chat_messages').fetchone()['c']
     top_human = db.execute("SELECT username, balance FROM users WHERE is_bot = 0 ORDER BY LENGTH(balance) DESC, balance DESC LIMIT 5").fetchall()
     top_human = [dict(r) for r in top_human]
-    for r in top_human: r['balance'] = int(r['balance'])
+    for r in top_human: r['balance'] = _safe_int(r['balance'])
 
     # House profit: total wagered - total paid out (all bets)
     # Use COUNT-based rough estimate to avoid CAST overflow on huge balances
@@ -1560,11 +1567,17 @@ def admin_secret():
             bot_only = request.form.get('bot_only') == '1'
             human_only = request.form.get('human_only') == '1'
             if bot_only:
-                db.execute('UPDATE users SET balance = CAST(balance AS REAL) + ? WHERE is_bot = 1', (amount,))
+                users = db.execute('SELECT id, balance FROM users WHERE is_bot = 1').fetchall()
+                for u in users:
+                    new_bal = str(_safe_int(u['balance']) + amount)
+                    db.execute('UPDATE users SET balance = ? WHERE id = ?', (new_bal, u['id']))
                 db.commit()
                 msg = f'💰 Gave ${amount:,} to all bots'
             elif human_only:
-                db.execute('UPDATE users SET balance = CAST(balance AS REAL) + ? WHERE is_bot = 0', (amount,))
+                users = db.execute('SELECT id, balance FROM users WHERE is_bot = 0').fetchall()
+                for u in users:
+                    new_bal = str(_safe_int(u['balance']) + amount)
+                    db.execute('UPDATE users SET balance = ? WHERE id = ?', (new_bal, u['id']))
                 db.commit()
                 msg = f'💰 Gave ${amount:,} to all humans'
             log_audit(session.get('username', '?'), 'mass_give', f'{amount} bot={bot_only} human={human_only}')
@@ -1617,7 +1630,10 @@ def admin_secret():
 
         elif action == 'house_skim':
             pct = float(request.form.get('pct', 5))
-            db.execute("UPDATE users SET balance = CAST(balance AS REAL) * (1 - ?/100.0) WHERE is_bot = 0", (pct,))
+            users = db.execute('SELECT id, balance FROM users WHERE is_bot = 0').fetchall()
+            for u in users:
+                new_bal = str(int(_safe_int(u['balance']) * (1 - pct / 100.0)))
+                db.execute('UPDATE users SET balance = ? WHERE id = ?', (new_bal, u['id']))
             db.commit()
             log_audit(session.get('username', '?'), 'house_skim', f'{pct}%')
             msg = f'🏦 Skimmed {pct}% from all humans'
@@ -1701,7 +1717,7 @@ def admin_secret():
     ''').fetchall()
     all_users = [dict(r) for r in all_users]
     for u in all_users:
-        try: u['balance'] = int(u['balance'])
+        try: u['balance'] = _safe_int(u['balance'])
         except: pass
 
     # Bots list
