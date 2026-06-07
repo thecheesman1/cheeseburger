@@ -959,6 +959,22 @@ _tower_games = {}   # {user_id: {'bet_amount': N, 'difficulty': X, 'levels': N}}
 _muted_users = set()  # muted chat users
 _disabled_games = set()  # toggled-off games
 
+@app.before_request
+def _enforce_live_rules():
+    # Chat mute enforcement
+    if request.method == 'POST' and request.path == '/chat/send':
+        user = get_user()
+        if user and user['username'] in _muted_users:
+            return jsonify({'error': 'You are muted.'}), 403
+    # Game disable enforcement
+    if request.path.startswith('/') and request.method in ('GET', 'POST'):
+        path = request.path.lstrip('/')
+        game = path.split('/')[0]
+        if game in _disabled_games and game in ('slots','coinflip','dice','blackjack','crash','roulette','mines','tower'):
+            if request.method == 'POST':
+                return jsonify({'error': f'{game} is disabled.'}), 403
+            return f'<h1>🎮 {game} is currently disabled</h1>', 403
+
 
 # ── Mines ────────────────────────────────────────────────────────
 
