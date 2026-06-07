@@ -9,7 +9,7 @@
     <div class="plinko-ball" id="plinkoBall" style="--slot:{{ result.slot }}"></div>
   </div>
   <div class="bet-result reveal {{ 'win' if result.win else 'loss' }}" id="plinkoResult">
-    <div class="plinko-result">Slot <b>#{{ result.slot }}</b> → {{ result.payout }} coins ({{ result.risk }} risk)</div>
+    <div class="plinko-result">Slot <b>#{{ result.slot }}</b> → {{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,}'.format(result.payout if result.win else result.bet_amount) }} ({{ result.risk }} risk)</div>
   </div>
 </div>
 {% endif %}

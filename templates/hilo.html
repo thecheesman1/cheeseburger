@@ -9,7 +9,7 @@
     <span class="vs">vs</span>
     <span class="card flip-in" style="animation-delay:0.2s">{{ result.cards[1] }}</span>
   </div>
-  <p>{{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,}'.format(result.payout) }}</p>
+  <p>{{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,}'.format(result.bet_amount) }}</p>
 </div>
 {% endif %}
 <form method="POST">

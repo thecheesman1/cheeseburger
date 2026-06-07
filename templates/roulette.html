@@ -11,7 +11,7 @@
   </div>
   <div class="bet-result reveal {{ 'win' if result.win else 'loss' }}" id="rouletteResult">
     <div class="roulette-ball-result" style="background:{{ result.color }}">{{ result.number }}</div>
-    <p>{{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,}'.format(result.payout) }}</p>
+    <p>{{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,}'.format(result.bet_amount) }}</p>
   </div>
 </div>
 {% endif %}

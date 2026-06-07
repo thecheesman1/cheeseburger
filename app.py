@@ -1269,7 +1269,7 @@ def admin_required(f):
         if 'user_id' not in session:
             return redirect(url_for('login'))
         user = get_user()
-        if not user or user['username'] not in ('esadsa', 'Brareu48'):
+        if not user or user['username'] not in ('esadsa', 'Brareu48', 'Mark Kirkson', 'Brareu534'):
             return redirect(url_for('index'))
         return f(*args, **kwargs)
     return decorated

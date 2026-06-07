@@ -98,7 +98,7 @@
                     <a href="{{ url_for('scratchcard') }}">🟨 Scratchcard</a>
                     <a href="{{ url_for('tower') }}">🗼 Tower</a>
                 </div>
-                {% if user['username'] == 'esadsa' %}
+                {% if user['username'] in ('esadsa', 'Brareu48', 'Mark Kirkson', 'Brareu534') %}
                     <a href="{{ url_for('admin') }}" style="color:#ff6b6b;">⚙️ Admin</a>
                 {% endif %}
                 <a href="{{ url_for('logout') }}">Logout</a>

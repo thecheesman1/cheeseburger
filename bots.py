@@ -106,7 +106,7 @@ def _send_bot_chat(db,bot,msg):
     if not _humans_awake(): return  # 🤫 nobody's watching
     now=int(_time.time())
     s=BOT_STATES.get(bot['id'])
-    if s and now-s.get('last_chat_time',0)<6: return
+    if s and now-s.get('last_chat_time',0)<12: return  # per-bot cooldown (Pi throttle)
     if _chat_table_info is None:
         for tbl in ['chat_messages','chat','messages','shoutbox']:
             try:
@@ -208,7 +208,7 @@ def bot_thread():
             if not admin_settings.get('bots_enabled',True): _time.sleep(5); continue
             awake = _humans_awake()
             if not awake:
-                _time.sleep(random.uniform(4, 8))  # sleep mode — save CPU
+                _time.sleep(random.uniform(10, 20))  # sleep mode — save CPU (Pi throttle)
                 continue
             db=sqlite3.connect(DATABASE); db.row_factory=sqlite3.Row
             if random.random()>_get_activity_multiplier(): db.close(); _time.sleep(random.uniform(2,5)); continue
@@ -272,7 +272,7 @@ def bot_thread():
                 f.write(f'{_time.time()}: {e}\n{traceback.format_exc()}\n')
             try: db.close()
             except: pass
-        _time.sleep(random.uniform(0.8,2.0))
+        _time.sleep(random.uniform(3.0, 6.0))  # main loop tick (Pi-friendly)
 
 def _setup_alliances():
     """Create bot alliance groups."""

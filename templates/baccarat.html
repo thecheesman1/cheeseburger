@@ -8,7 +8,7 @@
     <div class="baccarat-hand player"><b>Player</b> ({{ result.player_total }})<br><span class="card-small">{% for c in result.player_cards %}<span class="card-deal">{{ c }}</span>{% endfor %}</span></div>
     <div class="baccarat-hand banker"><b>Banker</b> ({{ result.banker_total }})<br><span class="card-small">{% for c in result.banker_cards %}<span class="card-deal">{{ c }}</span>{% endfor %}</span></div>
   </div>
-  <p>Bet on <b>{{ result.bet_on }}</b> → {{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,}'.format(result.payout) }}</p>
+  <p>Bet on <b>{{ result.bet_on }}</b> → {{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,}'.format(result.bet_amount) }}</p>
 </div>
 {% endif %}
 <form method="POST">

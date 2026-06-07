@@ -3,7 +3,7 @@
 <div class="game-box">
 <h2>🗼 Tower</h2>
 {% if result.bust %}
-<div class="bet-result loss" style="animation:resultPop 0.4s ease-out"><p>💥 Tower collapsed at level {{ result.levels }}!</p></div>
+<div class="bet-result loss" style="animation:resultPop 0.4s ease-out"><p>💥 Tower collapsed at level {{ result.levels }}! Lost ${{ '{:,}'.format(result.bet_amount) }}</p></div>
 {% elif result.cashed_out %}
 <div class="bet-result win" style="animation:resultPop 0.4s ease-out"><p>💰 Cashed out at level {{ result.levels }}! ${{ '{:,}'.format(result.payout) }} coins</p></div>
 {% endif %}

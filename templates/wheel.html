@@ -10,7 +10,7 @@
   </div>
   <div class="bet-result reveal {{ 'win' if result.win else 'loss' }}" id="wheelResult">
     <div class="wheel-segment">{{ result.segment_emoji }} {{ result.multiplier }}x</div>
-    <p>{{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,}'.format(result.payout) }}</p>
+    <p>{{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,}'.format(result.bet_amount) }}</p>
   </div>
 </div>
 {% endif %}
