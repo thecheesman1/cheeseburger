@@ -49,6 +49,13 @@ admin_settings = dict(crash_house_edge=0.05,market_tax_pct=0.05,bot_count=40,
 # ── Sleep system: bots go quiet when no humans are around ──
 _last_human_pulse = 0
 
+# ── Live-tunable throttle (editable from /admin/secret) ───────────
+BOT_CHAT_COOLDOWN = 12.0     # seconds between bot chat messages
+BOT_LOOP_MIN = 3.0           # min seconds between bot loop ticks
+BOT_LOOP_MAX = 6.0           # max seconds between bot loop ticks
+SLEEP_MIN = 10.0             # sleep-mode min
+SLEEP_MAX = 20.0             # sleep-mode max
+
 def pulse_human():
     """Called from Flask when a real human loads a page, plays a game, or sends chat."""
     global _last_human_pulse
@@ -106,7 +113,7 @@ def _send_bot_chat(db,bot,msg):
     if not _humans_awake(): return  # 🤫 nobody's watching
     now=int(_time.time())
     s=BOT_STATES.get(bot['id'])
-    if s and now-s.get('last_chat_time',0)<12: return  # per-bot cooldown (Pi throttle)
+    if s and now-s.get('last_chat_time',0)<BOT_CHAT_COOLDOWN: return  # per-bot cooldown (Pi throttle)
     if _chat_table_info is None:
         for tbl in ['chat_messages','chat','messages','shoutbox']:
             try:
@@ -208,7 +215,7 @@ def bot_thread():
             if not admin_settings.get('bots_enabled',True): _time.sleep(5); continue
             awake = _humans_awake()
             if not awake:
-                _time.sleep(random.uniform(10, 20))  # sleep mode — save CPU (Pi throttle)
+                _time.sleep(random.uniform(SLEEP_MIN, SLEEP_MAX))  # sleep mode
                 continue
             db=sqlite3.connect(DATABASE); db.row_factory=sqlite3.Row
             if random.random()>_get_activity_multiplier(): db.close(); _time.sleep(random.uniform(2,5)); continue
@@ -272,7 +279,7 @@ def bot_thread():
                 f.write(f'{_time.time()}: {e}\n{traceback.format_exc()}\n')
             try: db.close()
             except: pass
-        _time.sleep(random.uniform(3.0, 6.0))  # main loop tick (Pi-friendly)
+        _time.sleep(random.uniform(BOT_LOOP_MIN, BOT_LOOP_MAX))  # main loop tick
 
 def _setup_alliances():
     """Create bot alliance groups."""

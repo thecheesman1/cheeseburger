@@ -1818,10 +1818,10 @@ def admin_secret():
             secs = float(request.form.get('value', 6))
             import bots as _bth
             _bth.BOT_CHAT_COOLDOWN = secs
-            _bth.BOT_LOOP_MIN = max(1, secs / 2)
-            _bth.BOT_LOOP_MAX = secs
+            _bth.BOT_LOOP_MIN = max(1.0, secs / 3)
+            _bth.BOT_LOOP_MAX = max(2.0, secs / 2)
             log_audit(session.get('username', '?'), 'bot_throttle', f'{secs}s')
-            msg = f'⏱️ Bot chat cooldown: {secs}s, loop: {_bth.BOT_LOOP_MIN}-{_bth.BOT_LOOP_MAX}s'
+            msg = f'⏱️ Bot cooldown: {secs}s, loop: {_bth.BOT_LOOP_MIN:.1f}-{_bth.BOT_LOOP_MAX:.1f}s'
 
         elif action == 'flush_bot_cooldowns':
             import bots as _bfc
