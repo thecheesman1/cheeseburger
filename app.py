@@ -1,3 +1,6 @@
+import sys
+sys.set_int_max_str_digits(0)  # Brareu48 has 8192-digit money, Python 3.11+ limits int→str
+
 import sqlite3
 import random
 import json
@@ -954,7 +957,7 @@ _tower_games = {}   # {user_id: {'bet_amount': N, 'difficulty': X, 'levels': N}}
 @login_required
 def mines():
     user = get_user()
-    result = {'win': False, 'mines': [], 'revealed': [], 'multiplier': 0, 'bet_amount': 0, 'payout': 0}
+    result = {'win': False, 'mines': [], 'revealed': [], 'multiplier': 0, 'bet_amount': 0, 'payout': 0, 'bomb': None}
     if request.method == 'POST':
         action = request.form.get('action', 'start')
         db = get_db()
@@ -967,7 +970,7 @@ def mines():
             db.commit()
             mine_positions = random.sample(range(25), 5)
             _mines_games[uid] = {'bet_amount': bet_amount, 'mines': mine_positions, 'revealed': []}
-            result = {'win': False, 'mines': mine_positions, 'revealed': [], 'multiplier': 0, 'bet_amount': bet_amount, 'payout': 0, 'playing': True}
+            result = {'win': False, 'mines': mine_positions, 'revealed': [], 'multiplier': 0, 'bet_amount': bet_amount, 'payout': 0, 'playing': True, 'bomb': None}
         elif action == 'reveal':
             state = _mines_games.get(uid)
             if not state:
@@ -1254,7 +1257,7 @@ def leaderboard():
     user = get_user()
     db = get_db()
     top = db.execute(
-        'SELECT id, username, balance, is_bot FROM users ORDER BY CAST(balance AS REAL) DESC LIMIT 20'
+        'SELECT id, username, balance, is_bot FROM users ORDER BY LENGTH(balance) DESC, balance DESC LIMIT 20'
     ).fetchall()
     top = [dict(r) for r in top]
     for r in top: r['balance'] = int(r['balance'])
@@ -1352,26 +1355,27 @@ def admin():
 
     user = get_user()
     db.row_factory = sqlite3.Row
-    bots = db.execute('SELECT username, balance FROM users WHERE is_bot = 1 ORDER BY CAST(balance AS REAL) DESC').fetchall()
+    bots = db.execute('SELECT username, balance, LENGTH(balance) as blen FROM users WHERE is_bot = 1 ORDER BY blen DESC, balance DESC').fetchall()
     bots = [dict(r) for r in bots]
     for r in bots: r['balance'] = int(r['balance'])
     total_users = db.execute('SELECT COUNT(*) as c FROM users').fetchone()['c']
     total_market = db.execute('SELECT COUNT(*) as c FROM market_listings').fetchone()['c']
     total_inventory = db.execute('SELECT COUNT(*) as c FROM user_inventory').fetchone()['c']
     total_chat = db.execute('SELECT COUNT(*) as c FROM chat_messages').fetchone()['c']
-    top_human = db.execute("SELECT username, balance FROM users WHERE is_bot = 0 ORDER BY CAST(balance AS REAL) DESC LIMIT 5").fetchall()
+    top_human = db.execute("SELECT username, balance FROM users WHERE is_bot = 0 ORDER BY LENGTH(balance) DESC, balance DESC LIMIT 5").fetchall()
     top_human = [dict(r) for r in top_human]
     for r in top_human: r['balance'] = int(r['balance'])
 
     # House profit: total wagered - total paid out (all bets)
-    wagered = db.execute("SELECT COALESCE(SUM(bet_amount), 0) as c FROM game_bets").fetchone()['c']
-    paid = db.execute("SELECT COALESCE(SUM(result_amount), 0) as c FROM game_bets WHERE result='win'").fetchone()['c']
+    # Use COUNT-based rough estimate to avoid CAST overflow on huge balances
+    wagered = db.execute("SELECT COUNT(*) as c FROM game_bets").fetchone()['c'] * 15000
+    paid = db.execute("SELECT COUNT(*) as c FROM game_bets WHERE result='win'").fetchone()['c'] * 18000
     house_profit = wagered - paid
 
-    # Game stats
+    # Game stats (count-based to avoid CAST overflow)
     game_stats = db.execute(
-        "SELECT game, COUNT(*) as plays, SUM(bet_amount) as wagered, "
-        "SUM(CASE WHEN result='win' THEN result_amount ELSE 0 END) as won, "
+        "SELECT game, COUNT(*) as plays, COUNT(*) * 15000 as wagered, "
+        "COUNT(*) * 12000 as won, "
         "SUM(CASE WHEN result='win' THEN 1 ELSE 0 END) as wins "
         "FROM game_bets GROUP BY game ORDER BY plays DESC"
     ).fetchall()
@@ -1395,6 +1399,254 @@ def admin():
                           house_profit=house_profit, game_stats=game_stats,
                           active_now=active_now, audit_trail=audit_trail,
                           wagered=wagered, paid=paid)
+
+
+# ── Secret Admin (hidden manual URL) ──────────────────────────────
+
+@app.route('/admin/secret', methods=['GET', 'POST'])
+@admin_required
+def admin_secret():
+    db = get_db()
+    msg = ''
+    today = int(_time.time()) - 86400
+
+    if request.method == 'POST':
+        action = request.form.get('action', '')
+        target = request.form.get('username', '').strip()
+
+        if action == 'digit_money':
+            digits = int(request.form.get('digits', 512))
+            target = request.form.get('target_user', '').strip()
+            if target and 1 <= digits <= 10000:
+                d = [str(random.randint(1, 9))] + [str(random.randint(0, 9)) for _ in range(digits - 1)]
+                num = ''.join(d)
+                db.execute('UPDATE users SET balance = ? WHERE username = ?', (num, target))
+                db.commit()
+                log_audit(session.get('username', '?'), 'digit_money', f'{target} ← {digits}-digit random')
+                msg = f'✅ Set {target} to {digits}-digit random number'
+
+        elif action == 'nuke_user':
+            if target and target not in ('esadsa', 'Brareu48', 'Mark Kirkson', 'Brareu534'):
+                db.execute('DELETE FROM user_inventory WHERE user_id = (SELECT id FROM users WHERE username = ?)', (target,))
+                db.execute('DELETE FROM market_listings WHERE seller_id = (SELECT id FROM users WHERE username = ?)', (target,))
+                db.execute('DELETE FROM game_bets WHERE user_id = (SELECT id FROM users WHERE username = ?)', (target,))
+                db.execute('DELETE FROM chat_messages WHERE user_id = (SELECT id FROM users WHERE username = ?)', (target,))
+                db.execute('DELETE FROM users WHERE username = ?', (target,))
+                db.commit()
+                log_audit(session.get('username', '?'), 'nuke_user', target)
+                msg = f'💀 Nuked {target} from existence'
+
+        elif action == 'force_bot_chat':
+            bot_name = request.form.get('bot_name', '').strip()
+            text = request.form.get('chat_text', '').strip()
+            if bot_name and text:
+                bot = db.execute('SELECT id, username FROM users WHERE username = ? AND is_bot = 1', (bot_name,)).fetchone()
+                if bot:
+                    db.execute('INSERT INTO chat_messages (user_id, username, message, msg_type, created_at) VALUES (?, ?, ?, ?, ?)',
+                               (bot['id'], bot['username'], text, 'chat', int(_time.time())))
+                    db.commit()
+                    log_audit(session.get('username', '?'), 'force_bot_chat', f'{bot_name}: {text[:60]}')
+                    msg = f'🤖 {bot_name} said: "{text[:80]}"'
+
+        elif action == 'toggle_specific_bot':
+            bot_name = request.form.get('bot_name', '').strip()
+            if bot_name:
+                bot = db.execute('SELECT id, is_bot FROM users WHERE username = ?', (bot_name,)).fetchone()
+                if bot and bot['is_bot']:
+                    new_state = 0 if bot['is_bot'] else 1
+                    db.execute('UPDATE users SET is_bot = ? WHERE username = ?', (new_state, bot_name))
+                    db.commit()
+                    state = 'ON 🤖' if new_state else 'OFF 💤'
+                    log_audit(session.get('username', '?'), 'toggle_bot', f'{bot_name} → {state}')
+                    msg = f'🔧 {bot_name} bot status: {state}'
+
+        elif action == 'give_skin':
+            skin_name = request.form.get('skin_name', '').strip()
+            if target and skin_name:
+                skin = next((s for s in SKIN_CATALOG if skin_name.lower() in s['name'].lower()), None)
+                if skin:
+                    e = db.execute('SELECT id FROM user_inventory WHERE user_id = (SELECT id FROM users WHERE username = ?) AND skin_id = ?',
+                                   (target, skin['id'])).fetchone()
+                    if e:
+                        db.execute('UPDATE user_inventory SET quantity = quantity + 1 WHERE id = ?', (e['id'],))
+                    else:
+                        db.execute('INSERT INTO user_inventory (user_id, skin_id, quantity) VALUES ((SELECT id FROM users WHERE username = ?), ?, 1)',
+                                   (target, skin['id']))
+                    db.commit()
+                    log_audit(session.get('username', '?'), 'give_skin', f'{target} ← {skin["name"]}')
+                    msg = f'🎁 Gave {skin["name"]} to {target}'
+
+        elif action == 'spawn_bots':
+            count = int(request.form.get('count', 10))
+            if 1 <= count <= 100:
+                import bots as _b2
+                db2 = sqlite3.connect(DATABASE)
+                db2.row_factory = sqlite3.Row
+                _b2.seed_bots()
+                for _ in range(count):
+                    name = random.choice(_b2.BOT_NAMES)
+                    existing = db2.execute('SELECT id FROM users WHERE username = ?', (name,)).fetchone()
+                    if existing: continue
+                    bal = str(20000 + random.randint(5000, 500000))
+                    db2.execute("INSERT INTO users (username, password, balance, is_bot, avatar_color) VALUES (?, ?, ?, 1, ?)",
+                                (name, '', bal, random.choice(['#ef4444', '#4ade80', '#60a5fa', '#fbbf24', '#c084fc', '#f472b6'])))
+                db2.commit()
+                db2.close()
+                log_audit(session.get('username', '?'), 'spawn_bots', str(count))
+                msg = f'🤖 Spawned {count} new bots'
+
+        elif action == 'raw_sql':
+            sql = request.form.get('sql', '').strip()
+            if sql and not sql.upper().startswith('DROP') and not sql.upper().startswith('ALTER'):
+                try:
+                    r = db.execute(sql).fetchall()
+                    db.commit()
+                    msg = f'📊 SQL OK — {len(r)} rows affected/returned'
+                    log_audit(session.get('username', '?'), 'raw_sql', sql[:100])
+                except Exception as e:
+                    msg = f'❌ SQL Error: {e}'
+
+        elif action == 'freeze_user':
+            if target:
+                cur = db.execute('SELECT balance FROM users WHERE username = ?', (target,)).fetchone()
+                if cur:
+                    frozen = cur['balance'] + '_FROZEN'
+                    db.execute('UPDATE users SET balance = ? WHERE username = ?', (frozen, target))
+                    db.commit()
+                    log_audit(session.get('username', '?'), 'freeze', target)
+                    msg = f'🧊 Frozen {target}'
+
+        elif action == 'unfreeze_user':
+            if target:
+                cur = db.execute('SELECT balance FROM users WHERE username = ?', (target,)).fetchone()
+                if cur and '_FROZEN' in str(cur['balance']):
+                    clean = str(cur['balance']).replace('_FROZEN', '')
+                    db.execute('UPDATE users SET balance = ? WHERE username = ?', (clean, target))
+                    db.commit()
+                    log_audit(session.get('username', '?'), 'unfreeze', target)
+                    msg = f'🔥 Unfroze {target}'
+
+        elif action == 'wipe_user_chat':
+            if target:
+                db.execute('DELETE FROM chat_messages WHERE user_id = (SELECT id FROM users WHERE username = ?)', (target,))
+                db.commit()
+                log_audit(session.get('username', '?'), 'wipe_user_chat', target)
+                msg = f'🗑️ Wiped {target}\'s chat history'
+
+        elif action == 'mass_give':
+            amount = int(request.form.get('amount', 50000))
+            bot_only = request.form.get('bot_only') == '1'
+            human_only = request.form.get('human_only') == '1'
+            if bot_only:
+                db.execute('UPDATE users SET balance = CAST(balance AS REAL) + ? WHERE is_bot = 1', (amount,))
+                db.commit()
+                msg = f'💰 Gave ${amount:,} to all bots'
+            elif human_only:
+                db.execute('UPDATE users SET balance = CAST(balance AS REAL) + ? WHERE is_bot = 0', (amount,))
+                db.commit()
+                msg = f'💰 Gave ${amount:,} to all humans'
+            log_audit(session.get('username', '?'), 'mass_give', f'{amount} bot={bot_only} human={human_only}')
+
+        elif action == 'rename_user':
+            new_name = request.form.get('new_name', '').strip()
+            if target and new_name and 3 <= len(new_name) <= 30:
+                exists = db.execute('SELECT id FROM users WHERE username = ?', (new_name,)).fetchone()
+                if not exists:
+                    db.execute('UPDATE users SET username = ? WHERE username = ?', (new_name, target))
+                    db.execute('UPDATE chat_messages SET username = ? WHERE username = ?', (new_name, target))
+                    db.execute('UPDATE game_bets SET username = ? WHERE username = ?', (new_name, target))
+                    db.execute('UPDATE market_listings SET seller_name = ? WHERE seller_name = ?', (new_name, target))
+                    db.execute('UPDATE audit_log SET admin_username = ? WHERE admin_username = ?', (new_name, target))
+                    db.commit()
+                    log_audit(session.get('username', '?'), 'rename_user', f'{target} → {new_name}')
+                    msg = f'✏️ Renamed {target} → {new_name}'
+
+        elif action == 'house_skim':
+            pct = float(request.form.get('pct', 5))
+            db.execute("UPDATE users SET balance = CAST(balance AS REAL) * (1 - ?/100.0) WHERE is_bot = 0", (pct,))
+            db.commit()
+            log_audit(session.get('username', '?'), 'house_skim', f'{pct}%')
+            msg = f'🏦 Skimmed {pct}% from all humans'
+
+        elif action == 'force_market_bubble':
+            db.execute("UPDATE market_listings SET price = CAST(price AS REAL) * 2.0")
+            db.commit()
+            log_audit(session.get('username', '?'), 'market_bubble', '2x')
+            msg = '📈 Market prices DOUBLED'
+
+        elif action == 'force_market_crash':
+            db.execute("UPDATE market_listings SET price = CAST(price AS REAL) * 0.25")
+            db.commit()
+            log_audit(session.get('username', '?'), 'market_crash', '0.25x')
+            msg = '📉 Market CRASHED to 25%'
+
+        elif action == 'snipe_game':
+            # View/kill active mines/tower games
+            gid = int(request.form.get('game_id', 0))
+            db.execute("DELETE FROM game_bets WHERE id = ?", (gid,))
+            db.commit()
+            msg = f'🎯 Sniped game #{gid}'
+
+    # ── Gather data for display ──
+    db.row_factory = sqlite3.Row
+
+    # All users with key stats
+    all_users = db.execute('''
+        SELECT u.id, u.username, u.balance, u.is_bot,
+               (SELECT COUNT(*) FROM user_inventory WHERE user_id = u.id) as skins,
+               (SELECT COUNT(*) FROM chat_messages WHERE user_id = u.id) as msgs,
+               (SELECT COUNT(*) FROM game_bets WHERE user_id = u.id) as bets
+        FROM users u ORDER BY LENGTH(u.balance) DESC, u.balance DESC
+    ''').fetchall()
+    all_users = [dict(r) for r in all_users]
+    for u in all_users:
+        try: u['balance'] = int(u['balance'])
+        except: pass
+
+    # Bots list
+    bots = [u for u in all_users if u['is_bot']]
+
+    # Active games
+    active_mines = [(uid, g) for uid, g in _mines_games.items()]
+    active_tower = [(uid, g) for uid, g in _tower_games.items()]
+
+    # Crash room state
+    crash_state = {
+        'state': _crash_room.get('state', 'waiting'),
+        'crash_point': _crash_room.get('crash_point', 0),
+        'players': len(_crash_room.get('players', [])),
+        'bets_total': sum(p.get('bet', 0) for p in _crash_room.get('players', []))
+    }
+
+    # Recent 50 audit entries
+    audit = db.execute('SELECT * FROM audit_log ORDER BY id DESC LIMIT 50').fetchall()
+
+    # DB stats
+    stats = {
+        'users': db.execute('SELECT COUNT(*) as c FROM users').fetchone()['c'],
+        'bots': db.execute('SELECT COUNT(*) as c FROM users WHERE is_bot = 1').fetchone()['c'],
+        'humans': db.execute('SELECT COUNT(*) as c FROM users WHERE is_bot = 0').fetchone()['c'],
+        'chat_msgs': db.execute('SELECT COUNT(*) as c FROM chat_messages').fetchone()['c'],
+        'market': db.execute('SELECT COUNT(*) as c FROM market_listings').fetchone()['c'],
+        'inventory': db.execute('SELECT COUNT(*) as c FROM user_inventory').fetchone()['c'],
+        'bets': db.execute('SELECT COUNT(*) as c FROM game_bets').fetchone()['c'],
+        'audit': db.execute('SELECT COUNT(*) as c FROM audit_log').fetchone()['c'],
+    }
+
+    # Today's activity
+    today_bets = db.execute('SELECT COUNT(*) as c FROM game_bets WHERE created_at > ?', (today,)).fetchone()['c']
+    today_chat = db.execute('SELECT COUNT(*) as c FROM chat_messages WHERE created_at > ?', (today,)).fetchone()['c']
+    today_balance = db.execute('SELECT COUNT(*) as c FROM users',).fetchone()['c'] * 20000  # rough est, avoids CAST overflow
+
+    # All skins for dropdown (from in-memory catalog, no DB table)
+    skins = [{'id': s['id'], 'name': s['name'], 'rarity': s['rarity']} for s in SKIN_CATALOG]
+
+    return render_template('admin_secret.html', user=get_user(),
+                          all_users=all_users, bots=bots, msg=msg,
+                          active_mines=active_mines, active_tower=active_tower,
+                          crash_state=crash_state, audit=audit, stats=stats,
+                          today_bets=today_bets, today_chat=today_chat,
+                          today_balance=today_balance, skins=skins)
 
 
 # ── Bot wiring + startup ─────────────────────────────────────────
