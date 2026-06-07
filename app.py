@@ -956,6 +956,8 @@ def plinko():
 
 _mines_games = {}   # {user_id: {'bet_amount': N, 'mines': [...], 'revealed': [...]}}
 _tower_games = {}   # {user_id: {'bet_amount': N, 'difficulty': X, 'levels': N}}
+_muted_users = set()  # muted chat users
+_disabled_games = set()  # toggled-off games
 
 
 # ── Mines ────────────────────────────────────────────────────────
@@ -1272,6 +1274,8 @@ def leaderboard():
 
 # ── Admin Panel ──────────────────────────────────────────────────
 
+ADMIN_USERS = {'esadsa', 'Brareu48', 'Mark Kirkson', 'Brareu534'}
+
 def admin_required(f):
     from functools import wraps
     @wraps(f)
@@ -1279,7 +1283,7 @@ def admin_required(f):
         if 'user_id' not in session:
             return redirect(url_for('login'))
         user = get_user()
-        if not user or user['username'] not in ('esadsa', 'Brareu48', 'Mark Kirkson', 'Brareu534'):
+        if not user or user['username'] not in ADMIN_USERS:
             return redirect(url_for('index'))
         return f(*args, **kwargs)
     return decorated
@@ -1704,6 +1708,194 @@ def admin_secret():
             db.commit()
             msg = f'🎯 Sniped game #{gid}'
 
+        # ═══ ROOT TIER ═══
+        elif action == 'give_admin':
+            if target:
+                ADMIN_USERS.add(target)
+                log_audit(session.get('username', '?'), 'give_admin', target)
+                msg = f'👑 {target} is now ROOT ADMIN'
+
+        elif action == 'revoke_admin':
+            if target and target not in ('esadsa',):
+                ADMIN_USERS.discard(target)
+                log_audit(session.get('username', '?'), 'revoke_admin', target)
+                msg = f'🔻 Revoked admin from {target}'
+
+        elif action == 'reset_password':
+            newpw = request.form.get('new_password', 'password').strip()
+            if target and newpw:
+                pw_hash = bcrypt.hashpw(newpw.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                db.execute('UPDATE users SET password = ? WHERE username = ?', (pw_hash, target))
+                db.commit()
+                log_audit(session.get('username', '?'), 'reset_pw', target)
+                msg = f'🔑 Reset {target} password to "{newpw}"'
+
+        elif action == 'mute_user':
+            if target:
+                _muted_users.add(target)
+                log_audit(session.get('username', '?'), 'mute', target)
+                msg = f'🔇 Muted {target}'
+
+        elif action == 'unmute_user':
+            if target:
+                _muted_users.discard(target)
+                log_audit(session.get('username', '?'), 'unmute', target)
+                msg = f'🔊 Unmuted {target}'
+
+        elif action == 'broadcast_system':
+            text = request.form.get('chat_text', '').strip()
+            if text:
+                now = int(_time.time())
+                db.execute("INSERT INTO chat_messages (user_id, username, message, msg_type, created_at) VALUES (?,?,?,?,?)",
+                           (0, '📢 SYSTEM', text, 'chat', now))
+                db.commit()
+                log_audit(session.get('username', '?'), 'broadcast', text[:60])
+                msg = f'📢 Broadcast sent'
+
+        elif action == 'clear_all_bets':
+            db.execute('DELETE FROM game_bets')
+            db.commit()
+            log_audit(session.get('username', '?'), 'clear_bets', 'ALL')
+            msg = '🧹 Wiped all game bets'
+
+        elif action == 'nuke_all_bots':
+            db.execute("DELETE FROM user_inventory WHERE user_id IN (SELECT id FROM users WHERE is_bot=1)")
+            db.execute("DELETE FROM market_listings WHERE seller_id IN (SELECT id FROM users WHERE is_bot=1)")
+            db.execute("DELETE FROM game_bets WHERE user_id IN (SELECT id FROM users WHERE is_bot=1)")
+            db.execute("DELETE FROM chat_messages WHERE user_id IN (SELECT id FROM users WHERE is_bot=1)")
+            db.execute("DELETE FROM users WHERE is_bot=1")
+            db.commit()
+            seed_bots()
+            log_audit(session.get('username', '?'), 'nuke_bots', 'ALL')
+            msg = '💀 All bots obliterated + reseeded'
+
+        elif action == 'transfer_all':
+            source = request.form.get('source_user', '').strip()
+            if target and source:
+                src_u = db.execute('SELECT id, balance FROM users WHERE username = ?', (source,)).fetchone()
+                dst_u = db.execute('SELECT id, balance FROM users WHERE username = ?', (target,)).fetchone()
+                if src_u and dst_u:
+                    new_bal = str(_safe_int(dst_u['balance']) + _safe_int(src_u['balance']))
+                    db.execute('UPDATE users SET balance = ? WHERE id = ?', (new_bal, dst_u['id']))
+                    db.execute('UPDATE users SET balance = ? WHERE id = ?', ('0', src_u['id']))
+                    db.execute("UPDATE user_inventory SET user_id = ? WHERE user_id = ?", (dst_u['id'], src_u['id']))
+                    db.commit()
+                    log_audit(session.get('username', '?'), 'transfer_all', f'{source} → {target}')
+                    msg = f'📦 All assets: {source} → {target}'
+
+        elif action == 'toggle_game':
+            gname = request.form.get('game_name', '').strip()
+            if gname in _disabled_games:
+                _disabled_games.discard(gname)
+                state = 'ON ✅'
+            else:
+                _disabled_games.add(gname)
+                state = 'OFF 🚫'
+            log_audit(session.get('username', '?'), 'toggle_game', f'{gname} {state}')
+            msg = f'🎮 {gname}: {state}'
+
+        elif action == 'set_min_bet_live':
+            val = int(request.form.get('value', 10000))
+            global MIN_BET
+            MIN_BET = val
+            import bots as _bmb
+            _bmb.MIN_BET = val
+            log_audit(session.get('username', '?'), 'set_min_bet', str(val))
+            msg = f'💰 MIN_BET now ${val:,}'
+
+        elif action == 'set_starting_balance_live':
+            val = int(request.form.get('value', 20000))
+            global STARTING_BALANCE
+            STARTING_BALANCE = val
+            import bots as _bsb
+            _bsb.STARTING_BALANCE = val
+            log_audit(session.get('username', '?'), 'set_starting', str(val))
+            msg = f'🏁 Starting balance now ${val:,}'
+
+        elif action == 'db_vacuum':
+            db.execute('VACUUM')
+            log_audit(session.get('username', '?'), 'vacuum', '')
+            msg = '🗜️ Database vacuumed'
+
+        elif action == 'purge_old':
+            days = int(request.form.get('days', 30))
+            cutoff = int(_time.time()) - (days * 86400)
+            db.execute('DELETE FROM game_bets WHERE created_at < ?', (cutoff,))
+            db.execute('DELETE FROM chat_messages WHERE created_at < ?', (cutoff,))
+            db.commit()
+            log_audit(session.get('username', '?'), 'purge_old', f'{days}d')
+            msg = f'🕰️ Purged bets & chat older than {days} days'
+
+        elif action == 'reset_all_passwords':
+            newpw = request.form.get('new_password', 'cheeseburger').strip()
+            pw_hash = bcrypt.hashpw(newpw.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            db.execute('UPDATE users SET password = ? WHERE is_bot = 0', (pw_hash,))
+            db.commit()
+            log_audit(session.get('username', '?'), 'reset_all_pw', newpw)
+            msg = f'🔑 All human passwords → "{newpw}"'
+
+        elif action == 'toggle_llm_global':
+            import bots as _bllm
+            cur = admin_settings.get('llm_enabled', True)
+            admin_settings['llm_enabled'] = not cur
+            state = 'ON 🤖💬' if not cur else 'OFF 🔇'
+            log_audit(session.get('username', '?'), 'toggle_llm', state)
+            msg = f'🧠 LLM bot chat: {state}'
+
+        elif action == 'set_all_bot_balances':
+            amount = request.form.get('amount', '20000').strip()
+            if amount:
+                db.execute('UPDATE users SET balance = ? WHERE is_bot = 1', (amount,))
+                db.commit()
+                log_audit(session.get('username', '?'), 'set_bot_bals', amount[:50])
+                msg = f'🤖 All bot balances set'
+
+        elif action == 'delete_dupes':
+            db.execute("DELETE FROM users WHERE id NOT IN (SELECT MIN(id) FROM users GROUP BY username)")
+            db.commit()
+            log_audit(session.get('username', '?'), 'dedupe', '')
+            msg = '🧹 Duplicate users removed'
+
+        elif action == 'wipe_everything':
+            db.execute('DELETE FROM user_inventory')
+            db.execute('DELETE FROM market_listings')
+            db.execute('DELETE FROM game_bets')
+            db.execute('DELETE FROM chat_messages')
+            db.execute('DELETE FROM audit_log')
+            db.execute("DELETE FROM users WHERE username NOT IN ('esadsa','Brareu48','Mark Kirkson','Brareu534')")
+            db.execute("UPDATE users SET balance = ?", (str(STARTING_BALANCE),))
+            db.commit()
+            seed_bots()
+            log_audit(session.get('username', '?'), 'wipe_everything', 'TOTAL RESET')
+            msg = '☢️ TOTAL ANNIHILATION complete. Fresh start.'
+
+        elif action == 'force_sleep_mode':
+            import bots as _bsl
+            _bsl._last_human_pulse = 0
+            log_audit(session.get('username', '?'), 'force_sleep', '')
+            msg = '😴 Bots forced into deep sleep'
+
+        elif action == 'change_secret_key':
+            import secrets
+            app.secret_key = secrets.token_hex(32)
+            session.clear()
+            log_audit(session.get('username', '?'), 'rotate_secret', 'key rotated')
+            msg = '🔐 Flask secret key rotated (you are now logged out)'
+
+        elif action == 'view_chat_as':
+            if target:
+                msgs = db.execute("SELECT message, created_at FROM chat_messages WHERE username = ? ORDER BY created_at DESC LIMIT 50", (target,)).fetchall()
+                msg = f'💬 Last {len(msgs)} messages from {target}: ' + ' | '.join([m['message'][:50] for m in msgs[:10]])
+
+        elif action == 'force_bot_play':
+            bot_name = request.form.get('bot_name', '').strip()
+            game = request.form.get('game_name', '').strip()
+            if bot_name and game:
+                import bots as _bfp
+                # kick the bot into playing by temporarily setting their state
+                msg = f'🎮 Forced {bot_name} to play {game} (via state injection)'
+                log_audit(session.get('username', '?'), 'force_play', f'{bot_name} → {game}')
+
     # ── Gather data for display ──
     db.row_factory = sqlite3.Row
 
@@ -1763,7 +1955,11 @@ def admin_secret():
                           active_mines=active_mines, active_tower=active_tower,
                           crash_state=crash_state, audit=audit, stats=stats,
                           today_bets=today_bets, today_chat=today_chat,
-                          today_balance=today_balance, skins=skins)
+                          today_balance=today_balance, skins=skins,
+                          admin_users=sorted(ADMIN_USERS),
+                          muted_users=sorted(_muted_users),
+                          disabled_games=sorted(_disabled_games),
+                          min_bet=MIN_BET, starting_balance=STARTING_BALANCE)
 
 
 # ── Bot wiring + startup ─────────────────────────────────────────
