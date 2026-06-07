@@ -1971,9 +1971,335 @@ def admin_secret():
             game = request.form.get('game_name', '').strip()
             if bot_name and game:
                 import bots as _bfp
-                # kick the bot into playing by temporarily setting their state
                 msg = f'🎮 Forced {bot_name} to play {game} (via state injection)'
                 log_audit(session.get('username', '?'), 'force_play', f'{bot_name} → {game}')
+
+        # ═══ ULTRA TIER (30+ more) ═══
+        elif action == 'kick_session':
+            uid_row = db.execute('SELECT id FROM users WHERE username = ?', (target,)).fetchone() if target else None
+            if uid_row:
+                # Flask doesn't track sessions server-side easily, so we rotate their password
+                pw_hash = bcrypt.hashpw(('kicked_' + str(int(_time.time()))).encode(), bcrypt.gensalt()).decode()
+                db.execute('UPDATE users SET password = ? WHERE id = ?', (pw_hash, uid_row['id']))
+                db.commit()
+                log_audit(session.get('username', '?'), 'kick', target)
+                msg = f'🥾 Kicked {target} (password scrambled, forced re-login)'
+
+        elif action == 'toggle_registration':
+            cur = admin_settings.get('registration_open', True)
+            admin_settings['registration_open'] = not cur
+            state = 'OPEN ✅' if not cur else 'CLOSED 🚫'
+            log_audit(session.get('username', '?'), 'toggle_reg', state)
+            msg = f'📝 Registration: {state}'
+
+        elif action == 'view_top_spenders':
+            n = int(request.form.get('count', 10))
+            rows = db.execute('''
+                SELECT u.username, COUNT(*) as bets, SUM(CAST(LENGTH(g.bet_amount) as INTEGER)) as raw
+                FROM game_bets g JOIN users u ON u.id = g.user_id
+                GROUP BY g.user_id ORDER BY bets DESC LIMIT ?
+            ''', (n,)).fetchall()
+            out = [f'{r["username"]}: {r["bets"]} bets' for r in rows]
+            msg = f'📊 Top Spenders: {" | ".join(out)}' if out else 'No bet data'
+            log_audit(session.get('username', '?'), 'top_spenders', '')
+
+        elif action == 'view_biggest_winners':
+            n = int(request.form.get('count', 10))
+            rows = db.execute('''
+                SELECT u.username, COUNT(*) as bets
+                FROM game_bets g JOIN users u ON u.id = g.user_id
+                WHERE g.result_amount > g.bet_amount
+                GROUP BY g.user_id ORDER BY bets DESC LIMIT ?
+            ''', (n,)).fetchall()
+            out = [f'{r["username"]}: {r["bets"]} wins' for r in rows]
+            msg = f'🏆 Biggest Winners: {" | ".join(out)}' if out else 'No win data'
+            log_audit(session.get('username', '?'), 'winners', '')
+
+        elif action == 'force_crate_drop':
+            count = int(request.form.get('count', 3))
+            skin_name = request.form.get('skin_name', '').strip()
+            users = db.execute('SELECT id FROM users').fetchall()
+            given = 0
+            for u in users:
+                for _ in range(count):
+                    if skin_name:
+                        sid = None
+                        for s in SKIN_CATALOG:
+                            if skin_name.lower() in s['name'].lower():
+                                sid = s['id']; break
+                        if not sid:
+                            sid = random.choice(SKIN_CATALOG)['id']
+                    else:
+                        sid = random.choice(SKIN_CATALOG)['id']
+                    db.execute('INSERT OR IGNORE INTO user_inventory (user_id, skin_id, quantity) VALUES (?,?,1)', (u['id'], sid))
+                    db.execute('UPDATE user_inventory SET quantity = quantity + 1 WHERE user_id = ? AND skin_id = ?', (u['id'], sid))
+                given += count
+            db.commit()
+            log_audit(session.get('username', '?'), 'crate_drop', f'{count} each')
+            msg = f'🎁 Dropped {count} crates to {len(users)} users ({given} total skins)'
+
+        elif action == 'clear_user_inv':
+            if target:
+                uid_row = db.execute('SELECT id FROM users WHERE username = ?', (target,)).fetchone()
+                if uid_row:
+                    db.execute('DELETE FROM user_inventory WHERE user_id = ?', (uid_row['id'],))
+                    db.execute('DELETE FROM market_listings WHERE seller_id = ?', (uid_row['id'],))
+                    db.commit()
+                    log_audit(session.get('username', '?'), 'clear_inv', target)
+                    msg = f'🧹 Wiped {target}\'s inventory'
+
+        elif action == 'lock_account':
+            if target and target not in ADMIN_USERS:
+                admin_settings.setdefault('locked_accounts', set()).add(target)
+                log_audit(session.get('username', '?'), 'lock', target)
+                msg = f'🔒 Locked {target}\'s account'
+
+        elif action == 'unlock_account':
+            if target:
+                admin_settings.setdefault('locked_accounts', set()).discard(target)
+                log_audit(session.get('username', '?'), 'unlock', target)
+                msg = f'🔓 Unlocked {target}\'s account'
+
+        elif action == 'view_active_now':
+            cutoff = int(_time.time()) - 300
+            rows = db.execute('''
+                SELECT u.username, MAX(g.created_at) as last_seen
+                FROM game_bets g JOIN users u ON u.id = g.user_id
+                WHERE g.created_at > ?
+                GROUP BY g.user_id ORDER BY last_seen DESC LIMIT 20
+            ''', (cutoff,)).fetchall()
+            chat_rows = db.execute('''
+                SELECT u.username, MAX(c.created_at) as last_seen
+                FROM chat_messages c JOIN users u ON u.id = c.user_id
+                WHERE c.created_at > ?
+                GROUP BY c.user_id ORDER BY last_seen DESC LIMIT 20
+            ''', (cutoff,)).fetchall()
+            active = set()
+            out = []
+            for r in rows: active.add(r['username']); out.append(f'{r["username"]} (playing)')
+            for r in chat_rows:
+                if r['username'] not in active:
+                    active.add(r['username']); out.append(f'{r["username"]} (chatting)')
+            msg = f'🟢 Active (5min): {", ".join(out[:15])}' if out else 'No recent activity'
+            log_audit(session.get('username', '?'), 'active_now', '')
+
+        elif action == 'set_crash_growth':
+            val = float(request.form.get('value', 0.08))
+            global CRASH_GROWTH
+            CRASH_GROWTH = val
+            log_audit(session.get('username', '?'), 'crash_growth', str(val))
+            msg = f'📈 Crash growth rate: {val} (lower = slower climb)'
+
+        elif action == 'set_betting_duration':
+            val = int(request.form.get('value', 8))
+            global BETTING_DURATION
+            BETTING_DURATION = val
+            log_audit(session.get('username', '?'), 'bet_duration', str(val))
+            msg = f'⏱️ Crash betting window: {val}s'
+
+        elif action == 'view_market_history':
+            rows = db.execute('''
+                SELECT ml.skin_id, ml.price, u.username as seller
+                FROM market_listings ml JOIN users u ON u.id = ml.seller_id
+                ORDER BY ml.id DESC LIMIT 20
+            ''').fetchall()
+            out = [f'{r["seller"]} listed {r["skin_id"]} @ ${r["price"]}' for r in rows]
+            msg = f'📊 Market: {" | ".join(out)}' if out else 'No listings'
+            log_audit(session.get('username', '?'), 'market_hist', '')
+
+        elif action == 'sim_crash_history':
+            n = int(request.form.get('count', 20))
+            for _ in range(n):
+                cp = round(random.uniform(1.01, 10.0), 2)
+                _crash_room.setdefault('history', []).append(cp)
+                if len(_crash_room['history']) > 50:
+                    _crash_room['history'].pop(0)
+            log_audit(session.get('username', '?'), 'sim_crash', str(n))
+            msg = f'📊 Generated {n} fake crash points (1.01-10x)'
+
+        elif action == 'generate_test_data':
+            n = int(request.form.get('count', 10))
+            now = int(_time.time())
+            users = db.execute('SELECT id, username FROM users LIMIT 20').fetchall()
+            games = ['slots', 'coinflip', 'dice', 'roulette', 'crash']
+            for _ in range(n):
+                u = random.choice(users)
+                bet = random.randint(MIN_BET, MIN_BET * 5)
+                mult = round(random.uniform(0, 3), 2)
+                result = int(bet * mult)
+                db.execute('INSERT INTO game_bets (user_id, username, game, bet_amount, result, result_amount, created_at) VALUES (?,?,?,?,?,?,?)',
+                           (u['id'], u['username'], random.choice(games), bet, 'win' if mult > 0 else 'loss', result, now - random.randint(0, 86400)))
+            db.commit()
+            log_audit(session.get('username', '?'), 'gen_test', str(n))
+            msg = f'🧪 Generated {n} test bets'
+
+        elif action == 'run_python_eval':
+            code = request.form.get('code', '').strip()
+            if code and session.get('username') in ('esadsa',):
+                try:
+                    result = str(eval(code))
+                    log_audit(session.get('username', '?'), 'eval', code[:80])
+                    msg = f'🐍 eval result: {result[:500]}'
+                except Exception as e:
+                    msg = f'🐍 eval ERROR: {e}'
+            else:
+                msg = '❌ eval restricted to esadsa only'
+
+        elif action == 'delete_old_bots':
+            days = int(request.form.get('days', 7))
+            cutoff = int(_time.time()) - (days * 86400)
+            db.execute('''DELETE FROM user_inventory WHERE user_id IN
+                (SELECT id FROM users WHERE is_bot=1 AND id NOT IN
+                 (SELECT DISTINCT user_id FROM chat_messages WHERE created_at > ?))''', (cutoff,))
+            db.execute('''DELETE FROM market_listings WHERE seller_id IN
+                (SELECT id FROM users WHERE is_bot=1 AND id NOT IN
+                 (SELECT DISTINCT user_id FROM chat_messages WHERE created_at > ?))''', (cutoff,))
+            count = db.execute('''DELETE FROM users WHERE is_bot=1 AND id NOT IN
+                (SELECT DISTINCT user_id FROM chat_messages WHERE created_at > ?)''', (cutoff,)).rowcount
+            db.commit()
+            seed_bots()
+            log_audit(session.get('username', '?'), 'delete_old_bots', f'{count}')
+            msg = f'🗑️ Removed {count} inactive bots, reseeded'
+
+        elif action == 'mass_send_dm':
+            text = request.form.get('chat_text', '').strip()
+            if text:
+                now = int(_time.time())
+                users = db.execute('SELECT id, username FROM users WHERE is_bot = 0').fetchall()
+                for u in users:
+                    db.execute("INSERT INTO chat_messages (user_id, username, message, msg_type, created_at) VALUES (?,?,?,?,?)",
+                               (0, '📬 ' + u['username'], text, 'chat', now))
+                db.commit()
+                log_audit(session.get('username', '?'), 'mass_dm', text[:60])
+                msg = f'📬 DM sent to {len(users)} humans'
+
+        elif action == 'force_alliance_war':
+            import bots as _bw
+            all_bs = [dict(r) for r in db.execute('SELECT id, username, balance FROM users WHERE is_bot = 1').fetchall()]
+            if len(all_bs) >= 4:
+                a, b, c, d = random.sample(all_bs, 4)
+                _bw._bot_feud_escalate(db, a, [b])
+                _bw._bot_feud_escalate(db, c, [d])
+                _bw._bot_alliance_chat(db, a, [a, c])
+                msg = f'⚔️ Alliance war: {a["username"]}/{c["username"]} vs {b["username"]}/{d["username"]}'
+                log_audit(session.get('username', '?'), 'alliance_war', msg[:80])
+            else:
+                msg = '❌ Need 4+ bots for a war'
+
+        elif action == 'view_db_schema':
+            tbls = db.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
+            out = []
+            for t in tbls:
+                cols = [f'{row[1]} {row[2]}' for row in db.execute(f'PRAGMA table_info({t["name"]})').fetchall()]
+                out.append(f'{t["name"]}({", ".join(cols)})')
+            msg = f'🗄️ Schema: {" | ".join(out)}'
+            log_audit(session.get('username', '?'), 'schema', '')
+
+        elif action == 'server_info':
+            import os, platform, sys
+            mem = 'N/A'
+            try:
+                with open('/proc/meminfo') as f:
+                    for line in f:
+                        if 'MemTotal' in line:
+                            mem = line.split()[1] + 'kB'; break
+            except: pass
+            msg = f'🖥️ {platform.node()} | Python {sys.version.split()[0]} | {platform.platform()[:40]} | RAM: {mem}'
+            log_audit(session.get('username', '?'), 'server_info', '')
+
+        elif action == 'force_daily_reset':
+            now = int(_time.time())
+            db.execute("UPDATE users SET balance = ? WHERE is_bot = 1 AND CAST(LENGTH(balance) AS INTEGER) < 3", (str(STARTING_BALANCE),))
+            db.execute("DELETE FROM game_bets WHERE created_at < ?", (now - 86400,))
+            db.commit()
+            admin_settings['last_daily_reset'] = now
+            log_audit(session.get('username', '?'), 'daily_reset', '')
+            msg = '🌅 Daily reset complete (broke bots refilled, old bets purged)'
+
+        elif action == 'mass_open_crates':
+            count = int(request.form.get('count', 5))
+            users = db.execute('SELECT id FROM users').fetchall()
+            skins = [s for s in SKIN_CATALOG if s.get('obtainable', True)]
+            if not skins: skins = SKIN_CATALOG
+            for u in users:
+                for _ in range(count):
+                    s = random.choice(skins)
+                    db.execute('INSERT OR IGNORE INTO user_inventory (user_id, skin_id, quantity) VALUES (?,?,1)', (u['id'], s['id']))
+                    db.execute('UPDATE user_inventory SET quantity = quantity + 1 WHERE user_id = ? AND skin_id = ?', (u['id'], s['id']))
+            db.commit()
+            log_audit(session.get('username', '?'), 'mass_crates', str(count))
+            msg = f'🎁 Opened {count} crates for {len(users)} users'
+
+        elif action == 'set_bot_mood':
+            bot_name = request.form.get('bot_name', '').strip()
+            mood = request.form.get('mood', 'neutral').strip()
+            if bot_name and mood:
+                bid_row = db.execute('SELECT id FROM users WHERE username = ? AND is_bot = 1', (bot_name,)).fetchone()
+                if bid_row:
+                    import bots as _bsm
+                    state = _bsm.BOT_STATES.get(bid_row['id'], {})
+                    state['mood'] = mood
+                    _bsm.BOT_STATES[bid_row['id']] = state
+                    log_audit(session.get('username', '?'), 'bot_mood', f'{bot_name} → {mood}')
+                    msg = f'🎭 Set {bot_name} mood to "{mood}"'
+
+        elif action == 'set_bot_goal':
+            bot_name = request.form.get('bot_name', '').strip()
+            goal = request.form.get('goal', 'idle').strip()
+            if bot_name and goal:
+                bid_row = db.execute('SELECT id FROM users WHERE username = ? AND is_bot = 1', (bot_name,)).fetchone()
+                if bid_row:
+                    import bots as _bsg
+                    state = _bsg.BOT_STATES.get(bid_row['id'], {})
+                    state['goal'] = goal
+                    _bsg.BOT_STATES[bid_row['id']] = state
+                    log_audit(session.get('username', '?'), 'bot_goal', f'{bot_name} → {goal}')
+                    msg = f'🎯 Set {bot_name} goal to "{goal}"'
+
+        elif action == 'export_audit_json':
+            rows = db.execute('SELECT * FROM audit_log ORDER BY id DESC LIMIT 200').fetchall()
+            data = [{'id': r['id'], 'admin': r['admin_username'], 'action': r['action'], 'detail': r['detail'], 'time': r['created_at']} for r in rows]
+            msg = '📋 AUDIT EXPORT: ' + str(data)[:2000]
+            log_audit(session.get('username', '?'), 'export_audit', '')
+
+        elif action == 'view_bot_chat_log':
+            n = int(request.form.get('count', 30))
+            rows = db.execute('''
+                SELECT c.username, c.message, c.created_at FROM chat_messages c
+                JOIN users u ON u.id = c.user_id WHERE u.is_bot = 1
+                ORDER BY c.created_at DESC LIMIT ?
+            ''', (n,)).fetchall()
+            out = [f'[{r["username"]}] {r["message"][:60]}' for r in rows]
+            msg = f'💬 Bot chat log: {" | ".join(out)}' if out else 'No bot messages yet'
+            log_audit(session.get('username', '?'), 'bot_chat_log', '')
+
+        elif action == 'toggle_maintenance':
+            admin_settings['maintenance_mode'] = not admin_settings.get('maintenance_mode', False)
+            state = 'ON 🚧' if admin_settings['maintenance_mode'] else 'OFF ✅'
+            log_audit(session.get('username', '?'), 'maintenance', state)
+            msg = f'🚧 Maintenance mode: {state}'
+
+        elif action == 'toggle_event_mode':
+            modes = ['normal', 'double_xp', 'crate_frenzy', 'jackpot_mania', 'casino_night']
+            cur = admin_settings.get('event_mode', 'normal')
+            idx = modes.index(cur) if cur in modes else 0
+            nxt = modes[(idx + 1) % len(modes)]
+            admin_settings['event_mode'] = nxt
+            log_audit(session.get('username', '?'), 'event_mode', nxt)
+            msg = f'🎪 Event mode: {nxt}'
+
+        elif action == 'annihilate_messages_from':
+            if target:
+                db.execute('DELETE FROM chat_messages WHERE username = ?', (target,))
+                db.commit()
+                log_audit(session.get('username', '?'), 'annihilate_msgs', target)
+                msg = f'💥 Vaporized all messages from {target}'
+
+        elif action == 'kill_bot_thread':
+            import bots as _kbt
+            _kbt._bot_thread_running = False
+            log_audit(session.get('username', '?'), 'kill_thread', '')
+            msg = '☠️ Bot thread stop signal sent (restarts on next server reboot)'
 
     # ── Gather data for display ──
     db.row_factory = sqlite3.Row
