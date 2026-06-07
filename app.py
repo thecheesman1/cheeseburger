@@ -1999,11 +1999,12 @@ def admin_secret():
     active_tower = [(uid, g) for uid, g in _tower_games.items()]
 
     # Crash room state
+    crash_players = _crash_room.get('players', {})
     crash_state = {
-        'state': _crash_room.get('state', 'waiting'),
-        'crash_point': _crash_room.get('crash_point', 0),
-        'players': len(_crash_room.get('players', [])),
-        'bets_total': sum(p.get('bet', 0) for p in _crash_room.get('players', []))
+        'state': _crash_room.get('phase', 'waiting'),
+        'crash_point': _crash_room.get('crash_point') or 0,
+        'players': len(crash_players),
+        'bets_total': sum(p.get('bet', 0) for p in crash_players.values())
     }
 
     # Recent 50 audit entries
