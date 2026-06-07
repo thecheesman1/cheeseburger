@@ -4,7 +4,7 @@
 <h2>🔢 Keno <span class="badge">1000x max</span></h2>
 {% if result.drawn %}
 <div class="bet-result {{ 'win' if result.win else 'loss' }}" style="animation:resultPop 0.4s ease-out">
-  <p>Hit <b>{{ result.matches }}/{{ result.picked|length }}</b> — {{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,.0f}'.format(result.payout) }}</p>
+  <p>Hit <b>{{ result.matches }}/{{ result.picked|length }}</b> — {{ '🎉 Won' if result.win else '💀 Lost' }} ${{ '{:,}'.format(result.payout) }}</p>
   <div class="keno-grid small">{% for n in range(1,81) %}<span class="keno-cell {{ 'hit' if n in result.drawn else '' }} {{ 'picked' if n in result.picked else '' }}">{{ n }}</span>{% endfor %}</div>
 </div>
 {% endif %}

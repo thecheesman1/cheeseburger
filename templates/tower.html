@@ -5,7 +5,7 @@
 {% if result.bust %}
 <div class="bet-result loss" style="animation:resultPop 0.4s ease-out"><p>💥 Tower collapsed at level {{ result.levels }}!</p></div>
 {% elif result.cashed_out %}
-<div class="bet-result win" style="animation:resultPop 0.4s ease-out"><p>💰 Cashed out at level {{ result.levels }}! ${{ '{:,.0f}'.format(result.payout) }} coins</p></div>
+<div class="bet-result win" style="animation:resultPop 0.4s ease-out"><p>💰 Cashed out at level {{ result.levels }}! ${{ '{:,}'.format(result.payout) }} coins</p></div>
 {% endif %}
 {% if not result.playing %}
 <form method="POST">
@@ -24,7 +24,7 @@
 {% else %}
 <div class="tower-display">
   <div class="tower-levels">{% for i in range(result.levels) %}<div class="level filled">🏗️</div>{% endfor %}<div class="level">⬆️</div></div>
-  <p style="font-size:1.5rem;color:#ffd700;text-align:center">Level {{ result.levels }} — ${{ '{:,.0f}'.format(result.payout) }} coins</p>
+  <p style="font-size:1.5rem;color:#ffd700;text-align:center">Level {{ result.levels }} — ${{ '{:,}'.format(result.payout) }} coins</p>
 </div>
 <div style="display:flex;gap:8px">
   <form method="POST" style="flex:1">

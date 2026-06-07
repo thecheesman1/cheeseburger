@@ -3,10 +3,10 @@
 <div class="game-box">
 <h2>💣 Mines</h2>
 {% if result.bomb is not none %}
-<div class="bet-result loss" style="animation:resultPop 0.4s ease-out"><p>💥 BOOM! Hit a mine at position {{ result.bomb }}. Lost ${{ '{:,.0f}'.format(result.bet_amount) }}</p></div>
+<div class="bet-result loss" style="animation:resultPop 0.4s ease-out"><p>💥 BOOM! Hit a mine at position {{ result.bomb }}. Lost ${{ '{:,}'.format(result.bet_amount) }}</p></div>
 <div class="mines-grid">{% for i in range(25) %}<div class="mine-cell {{ 'bomb' if i==result.bomb else 'revealed' if i in result.revealed else '' }}">{{ '💣' if i==result.bomb else '💎' if i in result.revealed else '?' }}</div>{% endfor %}</div>
 {% elif result.cashed_out %}
-<div class="bet-result win" style="animation:resultPop 0.4s ease-out"><p>💰 Cashed out! {{ result.revealed|length }} gems × {{ result.multiplier }}x = ${{ '{:,.0f}'.format(result.payout) }}</p></div>
+<div class="bet-result win" style="animation:resultPop 0.4s ease-out"><p>💰 Cashed out! {{ result.revealed|length }} gems × {{ result.multiplier }}x = ${{ '{:,}'.format(result.payout) }}</p></div>
 <div class="mines-grid">{% for i in range(25) %}<div class="mine-cell {{ 'revealed' if i in result.revealed else '' }}">{{ '💎' if i in result.revealed else '💣' }}</div>{% endfor %}</div>
 {% endif %}
 {% if not result.playing %}
@@ -37,7 +37,7 @@
   <input type="hidden" name="mines" value="{{ result.mines|join(',') }}">
   <input type="hidden" name="revealed" value="{{ result.revealed|join(',') }}">
   <input type="hidden" name="bet_amount" value="{{ result.bet_amount }}">
-  <button type="submit" class="btn cashout-btn">💰 Cashout ${{ '{:,.0f}'.format(result.payout) }}</button>
+  <button type="submit" class="btn cashout-btn">💰 Cashout ${{ '{:,}'.format(result.payout) }}</button>
 </form>
 {% endif %}
 </div>

@@ -47,9 +47,9 @@
             <h3>📊 Economy Overview</h3>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
                 <div style="text-align:center"><div class="big-stat gold">{{ total_users }}</div><small style="color:#888">Users</small></div>
-                <div style="text-align:center"><div class="big-stat green">${{ '{:,.0f}'.format(wagered) }}</div><small style="color:#888">Wagered</small></div>
-                <div style="text-align:center"><div class="big-stat">${{ '{:,.0f}'.format(paid) }}</div><small style="color:#888">Paid Out</small></div>
-                <div style="text-align:center"><div class="big-stat {{ 'green' if house_profit >= 0 else 'red' }}">${{ '{:,.0f}'.format(house_profit) }}</div><small style="color:#888">House Profit</small></div>
+                <div style="text-align:center"><div class="big-stat green">${{ '{:,}'.format(wagered) }}</div><small style="color:#888">Wagered</small></div>
+                <div style="text-align:center"><div class="big-stat">${{ '{:,}'.format(paid) }}</div><small style="color:#888">Paid Out</small></div>
+                <div style="text-align:center"><div class="big-stat {{ 'green' if house_profit >= 0 else 'red' }}">${{ '{:,}'.format(house_profit) }}</div><small style="color:#888">House Profit</small></div>
             </div>
             <div class="divider"></div>
             <div class="stat-row"><span>Market Listings</span><span class="stat-val">{{ total_listings }}</span></div>
@@ -69,7 +69,7 @@
             <div class="game-stat-row">
                 <span class="gs-name">{{ g['game'] }}</span>
                 <span class="gs-plays">{{ g['plays'] }}</span>
-                <span class="gs-profit {{ 'stat-green' if gprofit >= 0 else 'stat-red' }}">${{ '{:,.0f}'.format(gprofit) }}</span>
+                <span class="gs-profit {{ 'stat-green' if gprofit >= 0 else 'stat-red' }}">${{ '{:,}'.format(gprofit) }}</span>
             </div>
             {% endfor %}
             {% else %}
@@ -126,7 +126,7 @@
             <div class="divider"></div>
             <h3>👤 Top Humans</h3>
             {% for h in top_humans %}
-            <div class="stat-row"><span>{{ h['username'] }}</span><span class="stat-val">${{ '{:,.0f}'.format(h['balance']) }}</span></div>
+            <div class="stat-row"><span>{{ h['username'] }}</span><span class="stat-val">${{ '{:,}'.format(h['balance']) }}</span></div>
             {% endfor %}
         </div>
 
@@ -148,7 +148,7 @@
                 {% for b in bots %}
                 <div class="bot-row">
                     <span class="bot-name">{{ b['username'] }}</span>
-                    <span class="bot-bal">${{ '{:,.0f}'.format(b['balance']) }}</span>
+                    <span class="bot-bal">${{ '{:,}'.format(b['balance']) }}</span>
                     <form method="POST" style="display:inline">
                         <input type="hidden" name="action" value="reset_bot"><input type="hidden" name="username" value="{{ b['username'] }}">
                         <button type="submit" class="btn-sm btn-info" style="font-size:0.65rem;padding:0.15rem 0.4rem">Reset</button>

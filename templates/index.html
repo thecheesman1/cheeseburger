@@ -4,7 +4,7 @@
     <h1>🍔 Cheeseburger Casino</h1>
     <p>High stakes gambling — slots, dice, coin flips, blackjack &amp; crash</p>
     {% if user %}
-        <p style="color:#4ade80;font-weight:700;">Welcome back, {{ user['username'] }}! Your bankroll: <span class="bal-big">${{ '{:,.0f}'.format(user['balance']) }}</span></p>
+        <p style="color:#4ade80;font-weight:700;">Welcome back, {{ user['username'] }}! Your bankroll: <span class="bal-big">${{ '{:,}'.format(user['balance']) }}</span></p>
     {% else %}
         <a href="{{ url_for('register') }}" class="btn" style="display:inline-block;width:auto;padding:0.75rem 2rem;text-decoration:none;">Get Started — $20,000 Free</a>
     {% endif %}

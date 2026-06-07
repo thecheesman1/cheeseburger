@@ -5,7 +5,7 @@
 {% if result.cards %}
 <div class="bet-result {{ 'win' if result.win else 'loss' }}" style="animation:resultPop 0.4s ease-out">
   <div class="scratch-grid">{% for s in result.cards %}<span class="scratch-cell reveal" style="animation-delay:{{ loop.index0 * 0.15 }}s">{{ s }}</span>{% endfor %}</div>
-  {% if result.win %}<p>🎉 3 matches! {{ result.multiplier }}x → ${{ '{:,.0f}'.format(result.payout) }}</p>{% else %}<p>💀 No match. Lost ${{ '{:,.0f}'.format(result.bet_amount) }}</p>{% endif %}
+  {% if result.win %}<p>🎉 3 matches! {{ result.multiplier }}x → ${{ '{:,}'.format(result.payout) }}</p>{% else %}<p>💀 No match. Lost ${{ '{:,}'.format(result.bet_amount) }}</p>{% endif %}
 </div>
 {% endif %}
 <form method="POST">

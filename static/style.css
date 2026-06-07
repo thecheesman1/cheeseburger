@@ -52,6 +52,7 @@ nav .nav-links a:hover, nav .nav-links button:hover {
 }
 
 nav .balance {
+    word-break: break-all; max-width: 50ch; display: inline-block;
     color: #f0c040;
     font-weight: 700;
     font-size: 0.9rem;
@@ -59,6 +60,12 @@ nav .balance {
     padding: 0.4rem 0.8rem;
     border-radius: 8px;
     border: 1px solid rgba(240, 192, 64, 0.3);
+}
+
+/* 💰 Wrap fat stacks everywhere */
+.bal, .bal-big, .bot-bal, .stat-val, .gs-profit, .big-stat,
+.bet-result, .profit, .game-stat-row {
+    word-break: break-all; overflow-wrap: break-word;
 }
 
 .container {

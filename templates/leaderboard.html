@@ -28,7 +28,7 @@
                 {{ p['username'] }}
                 {% if p['is_bot'] %}<span class="bot-tag">bot</span>{% endif %}
             </td>
-            <td class="bal">${{ '{:,.0f}'.format(p['balance']) }}</td>
+            <td class="bal">${{ '{:,}'.format(p['balance']) }}</td>
         </tr>
         {% endfor %}
         </tbody>
