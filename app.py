@@ -1425,6 +1425,14 @@ def admin_secret():
                 log_audit(session.get('username', '?'), 'digit_money', f'{target} ← {digits}-digit random')
                 msg = f'✅ Set {target} to {digits}-digit random number'
 
+        elif action == 'set_exact_balance':
+            amount = request.form.get('amount', '').strip()
+            if target and amount:
+                db.execute('UPDATE users SET balance = ? WHERE username = ?', (amount, target))
+                db.commit()
+                log_audit(session.get('username', '?'), 'set_exact', f'{target} = {amount[:50]}...')
+                msg = f'💵 Set {target} balance'
+
         elif action == 'nuke_user':
             if target and target not in ('esadsa', 'Brareu48', 'Mark Kirkson', 'Brareu534'):
                 db.execute('DELETE FROM user_inventory WHERE user_id = (SELECT id FROM users WHERE username = ?)', (target,))
@@ -1448,11 +1456,23 @@ def admin_secret():
                     log_audit(session.get('username', '?'), 'force_bot_chat', f'{bot_name}: {text[:60]}')
                     msg = f'🤖 {bot_name} said: "{text[:80]}"'
 
+        elif action == 'all_bots_say':
+            text = request.form.get('chat_text', '').strip()
+            if text:
+                bots_all = db.execute('SELECT id, username FROM users WHERE is_bot = 1').fetchall()
+                now = int(_time.time())
+                for b in bots_all:
+                    db.execute('INSERT INTO chat_messages (user_id, username, message, msg_type, created_at) VALUES (?, ?, ?, ?, ?)',
+                               (b['id'], b['username'], f'{text} — {b["username"]}', 'chat', now))
+                db.commit()
+                log_audit(session.get('username', '?'), 'all_bots_say', text[:60])
+                msg = f'📢 All {len(bots_all)} bots shouted!'
+
         elif action == 'toggle_specific_bot':
             bot_name = request.form.get('bot_name', '').strip()
             if bot_name:
                 bot = db.execute('SELECT id, is_bot FROM users WHERE username = ?', (bot_name,)).fetchone()
-                if bot and bot['is_bot']:
+                if bot:
                     new_state = 0 if bot['is_bot'] else 1
                     db.execute('UPDATE users SET is_bot = ? WHERE username = ?', (new_state, bot_name))
                     db.commit()
@@ -1476,22 +1496,24 @@ def admin_secret():
                     log_audit(session.get('username', '?'), 'give_skin', f'{target} ← {skin["name"]}')
                     msg = f'🎁 Gave {skin["name"]} to {target}'
 
+        elif action == 'strip_skins':
+            if target:
+                db.execute('DELETE FROM user_inventory WHERE user_id = (SELECT id FROM users WHERE username = ?)', (target,))
+                db.commit()
+                log_audit(session.get('username', '?'), 'strip_skins', target)
+                msg = f'🫗 Stripped all skins from {target}'
+
         elif action == 'spawn_bots':
             count = int(request.form.get('count', 10))
             if 1 <= count <= 100:
-                import bots as _b2
-                db2 = sqlite3.connect(DATABASE)
-                db2.row_factory = sqlite3.Row
-                _b2.seed_bots()
                 for _ in range(count):
-                    name = random.choice(_b2.BOT_NAMES)
-                    existing = db2.execute('SELECT id FROM users WHERE username = ?', (name,)).fetchone()
+                    name = random.choice(BOT_NAMES)
+                    existing = db.execute('SELECT id FROM users WHERE username = ?', (name,)).fetchone()
                     if existing: continue
                     bal = str(20000 + random.randint(5000, 500000))
-                    db2.execute("INSERT INTO users (username, password, balance, is_bot, avatar_color) VALUES (?, ?, ?, 1, ?)",
-                                (name, '', bal, random.choice(['#ef4444', '#4ade80', '#60a5fa', '#fbbf24', '#c084fc', '#f472b6'])))
-                db2.commit()
-                db2.close()
+                    db.execute("INSERT INTO users (username, password, balance, is_bot) VALUES (?, ?, ?, 1)",
+                                (name, '', bal))
+                db.commit()
                 log_audit(session.get('username', '?'), 'spawn_bots', str(count))
                 msg = f'🤖 Spawned {count} new bots'
 
@@ -1501,7 +1523,7 @@ def admin_secret():
                 try:
                     r = db.execute(sql).fetchall()
                     db.commit()
-                    msg = f'📊 SQL OK — {len(r)} rows affected/returned'
+                    msg = f'📊 SQL OK — {len(r)} rows returned'
                     log_audit(session.get('username', '?'), 'raw_sql', sql[:100])
                 except Exception as e:
                     msg = f'❌ SQL Error: {e}'
@@ -1510,7 +1532,7 @@ def admin_secret():
             if target:
                 cur = db.execute('SELECT balance FROM users WHERE username = ?', (target,)).fetchone()
                 if cur:
-                    frozen = cur['balance'] + '_FROZEN'
+                    frozen = str(cur['balance']) + '_FROZEN'
                     db.execute('UPDATE users SET balance = ? WHERE username = ?', (frozen, target))
                     db.commit()
                     log_audit(session.get('username', '?'), 'freeze', target)
@@ -1547,6 +1569,14 @@ def admin_secret():
                 msg = f'💰 Gave ${amount:,} to all humans'
             log_audit(session.get('username', '?'), 'mass_give', f'{amount} bot={bot_only} human={human_only}')
 
+        elif action == 'mass_set_balance':
+            amount = request.form.get('amount', '20000').strip()
+            if amount:
+                db.execute('UPDATE users SET balance = ?', (amount,))
+                db.commit()
+                log_audit(session.get('username', '?'), 'mass_set', f'all = {amount[:50]}')
+                msg = f'💵 Set ALL users to same balance'
+
         elif action == 'rename_user':
             new_name = request.form.get('new_name', '').strip()
             if target and new_name and 3 <= len(new_name) <= 30:
@@ -1560,6 +1590,30 @@ def admin_secret():
                     db.commit()
                     log_audit(session.get('username', '?'), 'rename_user', f'{target} → {new_name}')
                     msg = f'✏️ Renamed {target} → {new_name}'
+
+        elif action == 'impersonate':
+            if target:
+                user_row = db.execute('SELECT id, username FROM users WHERE username = ?', (target,)).fetchone()
+                if user_row:
+                    session['user_id'] = user_row['id']
+                    log_audit(session.get('username', '?'), 'impersonate', target)
+                    msg = f'🕵️ Now logged in as {target}'
+
+        elif action == 'clone_user':
+            source = request.form.get('source_user', '').strip()
+            if target and source:
+                src = db.execute('SELECT balance FROM users WHERE username = ?', (source,)).fetchone()
+                if src:
+                    db.execute('UPDATE users SET balance = ? WHERE username = ?', (src['balance'], target))
+                    # Clone skins too
+                    db.execute('DELETE FROM user_inventory WHERE user_id = (SELECT id FROM users WHERE username = ?)', (target,))
+                    skins_src = db.execute('SELECT skin_id, quantity FROM user_inventory WHERE user_id = (SELECT id FROM users WHERE username = ?)', (source,)).fetchall()
+                    tid = db.execute('SELECT id FROM users WHERE username = ?', (target,)).fetchone()['id']
+                    for sk, qty in skins_src:
+                        db.execute('INSERT INTO user_inventory (user_id, skin_id, quantity) VALUES (?, ?, ?)', (tid, sk, qty))
+                    db.commit()
+                    log_audit(session.get('username', '?'), 'clone_user', f'{source} → {target}')
+                    msg = f'🧬 Cloned {source} → {target} (balance + skins)'
 
         elif action == 'house_skim':
             pct = float(request.form.get('pct', 5))
@@ -1580,8 +1634,55 @@ def admin_secret():
             log_audit(session.get('username', '?'), 'market_crash', '0.25x')
             msg = '📉 Market CRASHED to 25%'
 
+        elif action == 'wipe_all_market':
+            db.execute('DELETE FROM market_listings')
+            db.commit()
+            log_audit(session.get('username', '?'), 'wipe_market', 'all')
+            msg = '🧹 Wiped all market listings'
+
+        elif action == 'force_crash_now':
+            if _crash_room:
+                _crash_room['crash_point'] = float(request.form.get('crash_at', '1.01'))
+                _crash_room['state'] = 'ending'
+                log_audit(session.get('username', '?'), 'force_crash', str(_crash_room['crash_point']))
+                msg = f'💥 Crash triggered at {_crash_room["crash_point"]}x'
+
+        elif action == 'kill_all_games':
+            _mines_games.clear()
+            _tower_games.clear()
+            if _crash_room:
+                _crash_room['players'] = []
+                _crash_room['state'] = 'waiting'
+            log_audit(session.get('username', '?'), 'kill_all_games', '')
+            msg = '☠️ Killed all active games'
+
+        elif action == 'make_human':
+            if target:
+                db.execute('UPDATE users SET is_bot = 0 WHERE username = ?', (target,))
+                db.commit()
+                log_audit(session.get('username', '?'), 'make_human', target)
+                msg = f'👤 Made {target} human'
+
+        elif action == 'make_bot':
+            if target:
+                db.execute('UPDATE users SET is_bot = 1 WHERE username = ?', (target,))
+                db.commit()
+                log_audit(session.get('username', '?'), 'make_bot', target)
+                msg = f'🤖 Made {target} a bot'
+
+        elif action == 'view_user_deep':
+            if target:
+                uid_row = db.execute('SELECT id FROM users WHERE username = ?', (target,)).fetchone()
+                if uid_row:
+                    uid = uid_row['id']
+                    # Gather deep stats
+                    inv = db.execute('SELECT skin_id, quantity FROM user_inventory WHERE user_id = ?', (uid,)).fetchall()
+                    bets = db.execute('SELECT game, bet_amount, result, result_amount, created_at FROM game_bets WHERE user_id = ? ORDER BY created_at DESC LIMIT 30', (uid,)).fetchall()
+                    listings = db.execute('SELECT skin_id, price FROM market_listings WHERE seller_id = ?', (uid,)).fetchall()
+                    chat = db.execute('SELECT message, created_at FROM chat_messages WHERE user_id = ? ORDER BY created_at DESC LIMIT 20', (uid,)).fetchall()
+                    msg = f'🔍 Deep dive on {target}: {len(inv)} skins, {len(bets)} bets, {len(listings)} listings, {len(chat)} msgs'
+
         elif action == 'snipe_game':
-            # View/kill active mines/tower games
             gid = int(request.form.get('game_id', 0))
             db.execute("DELETE FROM game_bets WHERE id = ?", (gid,))
             db.commit()
