@@ -55,8 +55,8 @@ def pulse_human():
     _last_human_pulse = _time.time()
 
 def _humans_awake():
-    """True if a human has been active in the last 30 seconds."""
-    return (_time.time() - _last_human_pulse) < 30
+    """True if a human has been active in the last 8 seconds."""
+    return (_time.time() - _last_human_pulse) < 8
 
 DATABASE=None; MIN_BET=10000; STARTING_BALANCE=20000; CRATE_TYPES={}; SKIN_CATALOG=[]
 _crash_room=None; _get_multiplier=lambda:1.0; get_skin=lambda s:None
