@@ -1304,21 +1304,24 @@ def admin():
             global MIN_BET, STARTING_BALANCE
             MIN_BET = admin_settings['min_bet']
             STARTING_BALANCE = admin_settings['starting_balance']
-            log_audit('esadsa', 'save_settings', f'min={MIN_BET} start={STARTING_BALANCE}')
+            log_audit(session.get('username', '?'), 'save_settings', f'min={MIN_BET} start={STARTING_BALANCE}')
         elif action == 'give_money':
             target = request.form.get('username', '').strip()
             amount = int(request.form.get('amount', 0))
             if target and amount > 0:
-                db.execute('UPDATE users SET balance = balance + ? WHERE username = ?', (amount, target))
-                db.commit()
-                log_audit('esadsa', 'give_money', f'{target} +{amount}')
+                cur = db.execute('SELECT balance FROM users WHERE username = ?', (target,)).fetchone()
+                if cur:
+                    new_bal = str(_safe_int(cur['balance']) + amount)
+                    db.execute('UPDATE users SET balance = ? WHERE username = ?', (new_bal, target))
+                    db.commit()
+                log_audit(session.get('username', '?'), 'give_money', f'{target} +{amount}')
         elif action == 'set_balance':
             target = request.form.get('username', '').strip()
-            amount = int(request.form.get('amount', 0))
-            if target and amount >= 0:
-                db.execute('UPDATE users SET balance = ? WHERE username = ?', (str(amount), target))
+            amount = request.form.get('amount', '').strip()
+            if target and amount:
+                db.execute('UPDATE users SET balance = ? WHERE username = ?', (amount, target))
                 db.commit()
-                log_audit('esadsa', 'set_balance', f'{target} = {amount}')
+                log_audit(session.get('username', '?'), 'set_balance', f'{target} = {amount[:50]}')
         elif action == 'ban_user':
             target = request.form.get('username', '').strip()
             if target and target not in ('esadsa', 'Brareu48'):
@@ -1327,33 +1330,32 @@ def admin():
                 db.execute('DELETE FROM chat_messages WHERE user_id = (SELECT id FROM users WHERE username=?)', (target,))
                 db.execute('DELETE FROM users WHERE username = ?', (target,))
                 db.commit()
-                log_audit('esadsa', 'ban_user', target)
+                log_audit(session.get('username', '?'), 'ban_user', target)
         elif action == 'reset_bot':
             target = request.form.get('username', '').strip()
             if target:
                 db.execute('UPDATE users SET balance = ? WHERE username = ? AND is_bot = 1', (str(20000 + random.randint(5000, 100000)), target))
                 db.commit()
-                log_audit('esadsa', 'reset_bot', target)
+                log_audit(session.get('username', '?'), 'reset_bot', target)
         elif action == 'toggle_bots':
             admin_settings['bots_enabled'] = not admin_settings.get('bots_enabled', True)
-            log_audit('esadsa', 'toggle_bots', str(admin_settings['bots_enabled']))
+            log_audit(session.get('username', '?'), 'toggle_bots', str(admin_settings['bots_enabled']))
         elif action == 'force_crash':
-            global _crash_room
             if _crash_room:
                 _crash_room['crash_point'] = float(request.form.get('crash_at', '1.01'))
                 _crash_room['state'] = 'ending'
-            log_audit('esadsa', 'force_crash', str(_crash_room.get('crash_point', 0)))
+            log_audit(session.get('username', '?'), 'force_crash', str(_crash_room.get('crash_point', 0)))
         elif action == 'wipe_economy':
             db.execute("UPDATE users SET balance = ? WHERE is_bot = 0 AND username NOT IN ('esadsa','Brareu48')", (str(STARTING_BALANCE),))
             db.execute('DELETE FROM user_inventory')
             db.execute('DELETE FROM market_listings')
             db.commit()
             seed_bots()
-            log_audit('esadsa', 'wipe_economy', 'full reset')
+            log_audit(session.get('username', '?'), 'wipe_economy', 'full reset')
         elif action == 'wipe_chat':
             db.execute('DELETE FROM chat_messages')
             db.commit()
-            log_audit('esadsa', 'wipe_chat', '')
+            log_audit(session.get('username', '?'), 'wipe_chat', '')
         elif action == 'nuke':
             db.execute('DELETE FROM user_inventory')
             db.execute('DELETE FROM market_listings')
@@ -1362,7 +1364,7 @@ def admin():
             db.execute("DELETE FROM users WHERE username NOT IN ('esadsa','Brareu48')")
             db.commit()
             seed_bots()
-            log_audit('esadsa', 'nuke', 'full db reset')
+            log_audit(session.get('username', '?'), 'nuke', 'full db reset')
 
     user = get_user()
     db.row_factory = sqlite3.Row
@@ -1811,6 +1813,67 @@ def admin_secret():
             _bsb.STARTING_BALANCE = val
             log_audit(session.get('username', '?'), 'set_starting', str(val))
             msg = f'🏁 Starting balance now ${val:,}'
+
+        elif action == 'set_bot_throttle':
+            secs = float(request.form.get('value', 6))
+            import bots as _bth
+            _bth.BOT_CHAT_COOLDOWN = secs
+            _bth.BOT_LOOP_MIN = max(1, secs / 2)
+            _bth.BOT_LOOP_MAX = secs
+            log_audit(session.get('username', '?'), 'bot_throttle', f'{secs}s')
+            msg = f'⏱️ Bot chat cooldown: {secs}s, loop: {_bth.BOT_LOOP_MIN}-{_bth.BOT_LOOP_MAX}s'
+
+        elif action == 'flush_bot_cooldowns':
+            import bots as _bfc
+            for bid in list(_bfc.BOT_STATES.keys()):
+                s = _bfc.BOT_STATES[bid]
+                for k in list(s.keys()):
+                    if 'cooldown' in k.lower():
+                        s[k] = 0
+            log_audit(session.get('username', '?'), 'flush_cooldowns', '')
+            msg = '⚡ All bot cooldowns flushed'
+
+        elif action == 'dump_db_stats':
+            import os
+            dbsize = os.path.getsize(DATABASE)
+            tables = db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            rows = {}
+            for t in tables:
+                rows[t['name']] = db.execute(f"SELECT COUNT(*) as c FROM [{t['name']}]").fetchone()['c']
+            msg = f'📊 DB: {dbsize/1024:.0f}KB | ' + ' | '.join(f'{k}={v}' for k,v in rows.items())
+            log_audit(session.get('username', '?'), 'db_stats', '')
+
+        elif action == 'trigger_bot_event':
+            event = request.form.get('event', 'diurnal').strip()
+            import bots as _bev
+            all_bots = [dict(r) for r in db.execute('SELECT id, username, balance FROM users WHERE is_bot = 1').fetchall()]
+            if event == 'diurnal':
+                _bev._diurnal_event(db, all_bots)
+                msg = '🌅 Diurnal event triggered'
+            elif event == 'feud':
+                bot = random.choice(all_bots) if all_bots else None
+                if bot: _bev._bot_feud_escalate(db, bot, all_bots)
+                msg = '⚔️ Bot feud triggered'
+            elif event == 'alliance':
+                bot = random.choice(all_bots) if all_bots else None
+                if bot: _bev._bot_alliance_chat(db, bot, all_bots)
+                msg = '🤝 Alliance chat triggered'
+            elif event == 'market_manip':
+                bot = random.choice(all_bots) if all_bots else None
+                if bot: _bev._market_manipulation(db, bot, _bev.BOT_STATES.get(bot['id'], {}), _safe_int(bot['balance']))
+                msg = '📊 Market manipulation triggered'
+            log_audit(session.get('username', '?'), 'bot_event', event)
+
+        elif action == 'view_bot_states':
+            import bots as _bv
+            out = []
+            for bid, s in list(_bv.BOT_STATES.items())[:10]:
+                name = s.get('name', f'bot#{bid}')
+                mood = s.get('mood', '?')
+                goal = s.get('goal', '?')
+                out.append(f'{name}: mood={mood} goal={goal}')
+            msg = '🤖 Bot States: ' + (' | '.join(out) if out else 'none loaded')
+            log_audit(session.get('username', '?'), 'view_states', '')
 
         elif action == 'db_vacuum':
             db.execute('VACUUM')
