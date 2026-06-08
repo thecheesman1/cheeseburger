@@ -165,6 +165,14 @@ def init_db():
         db.execute('ALTER TABLE users ADD COLUMN is_bot INTEGER NOT NULL DEFAULT 0')
     except:
         pass
+
+    # Create default admin account if this is a fresh database
+    count = db.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+    if count == 0:
+        pw_hash = bcrypt.hashpw('admin'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        db.execute('INSERT INTO users(username, password, balance, is_bot) VALUES(?, ?, ?, 0)',
+                   ('admin', pw_hash, '20000'))
+
     db.commit()
     db.close()
 
@@ -1290,7 +1298,7 @@ def leaderboard():
 
 # ── Admin Panel ──────────────────────────────────────────────────
 
-ADMIN_USERS = {'esadsa', 'Brareu48', 'Mark Kirkson', 'Brareu534'}
+ADMIN_USERS = {'admin'}
 
 def admin_required(f):
     from functools import wraps
@@ -1340,7 +1348,7 @@ def admin():
                 log_audit(session.get('username', '?'), 'set_balance', f'{target} = {amount[:50]}')
         elif action == 'ban_user':
             target = request.form.get('username', '').strip()
-            if target and target not in ('esadsa', 'Brareu48'):
+            if target and target not in ADMIN_USERS:
                 db.execute('DELETE FROM user_inventory WHERE user_id = (SELECT id FROM users WHERE username=?)', (target,))
                 db.execute('DELETE FROM market_listings WHERE seller_id = (SELECT id FROM users WHERE username=?)', (target,))
                 db.execute('DELETE FROM chat_messages WHERE user_id = (SELECT id FROM users WHERE username=?)', (target,))
@@ -1362,7 +1370,7 @@ def admin():
                 _crash_room['state'] = 'ending'
             log_audit(session.get('username', '?'), 'force_crash', str(_crash_room.get('crash_point', 0)))
         elif action == 'wipe_economy':
-            db.execute("UPDATE users SET balance = ? WHERE is_bot = 0 AND username NOT IN ('esadsa','Brareu48')", (str(STARTING_BALANCE),))
+            db.execute("UPDATE users SET balance = ? WHERE is_bot = 0 AND username NOT IN ({})".format(','.join('?'*len(ADMIN_USERS))), (str(STARTING_BALANCE), *ADMIN_USERS))
             db.execute('DELETE FROM user_inventory')
             db.execute('DELETE FROM market_listings')
             db.commit()
@@ -1377,7 +1385,7 @@ def admin():
             db.execute('DELETE FROM market_listings')
             db.execute('DELETE FROM game_bets')
             db.execute('DELETE FROM chat_messages')
-            db.execute("DELETE FROM users WHERE username NOT IN ('esadsa','Brareu48')")
+            db.execute("DELETE FROM users WHERE username NOT IN ({})".format(','.join('?'*len(ADMIN_USERS))), tuple(ADMIN_USERS))
             db.commit()
             seed_bots()
             log_audit(session.get('username', '?'), 'nuke', 'full db reset')
@@ -1463,7 +1471,7 @@ def admin_secret():
                 msg = f'💵 Set {target} balance'
 
         elif action == 'nuke_user':
-            if target and target not in ('esadsa', 'Brareu48', 'Mark Kirkson', 'Brareu534'):
+            if target and target not in ADMIN_USERS:
                 db.execute('DELETE FROM user_inventory WHERE user_id = (SELECT id FROM users WHERE username = ?)', (target,))
                 db.execute('DELETE FROM market_listings WHERE seller_id = (SELECT id FROM users WHERE username = ?)', (target,))
                 db.execute('DELETE FROM game_bets WHERE user_id = (SELECT id FROM users WHERE username = ?)', (target,))
@@ -1734,7 +1742,7 @@ def admin_secret():
                 msg = f'👑 {target} is now ROOT ADMIN'
 
         elif action == 'revoke_admin':
-            if target and target not in ('esadsa',):
+            if target and target not in ('admin',):
                 ADMIN_USERS.discard(target)
                 log_audit(session.get('username', '?'), 'revoke_admin', target)
                 msg = f'🔻 Revoked admin from {target}'
@@ -1941,7 +1949,7 @@ def admin_secret():
             db.execute('DELETE FROM game_bets')
             db.execute('DELETE FROM chat_messages')
             db.execute('DELETE FROM audit_log')
-            db.execute("DELETE FROM users WHERE username NOT IN ('esadsa','Brareu48','Mark Kirkson','Brareu534')")
+            db.execute("DELETE FROM users WHERE username NOT IN ({})".format(','.join('?'*len(ADMIN_USERS))), tuple(ADMIN_USERS))
             db.execute("UPDATE users SET balance = ?", (str(STARTING_BALANCE),))
             db.commit()
             seed_bots()
@@ -2135,7 +2143,7 @@ def admin_secret():
 
         elif action == 'run_python_eval':
             code = request.form.get('code', '').strip()
-            if code and session.get('username') in ('esadsa',):
+            if code and session.get('username') in ADMIN_USERS:
                 try:
                     result = str(eval(code))
                     log_audit(session.get('username', '?'), 'eval', code[:80])
@@ -2143,7 +2151,7 @@ def admin_secret():
                 except Exception as e:
                     msg = f'🐍 eval ERROR: {e}'
             else:
-                msg = '❌ eval restricted to esadsa only'
+                msg = '❌ eval restricted to admin only'
 
         elif action == 'delete_old_bots':
             days = int(request.form.get('days', 7))

@@ -409,7 +409,7 @@ Each player has a personal inventory to manage their skin collection:
 ## ⚙️ Admin Panels
 
 ### Main Admin (`/admin`)
-Accessible only to the `esadsa` account. Provides high-level controls:
+Accessible only to admin accounts. Provides high-level controls:
 
 | Action | Description |
 |---|---|
@@ -452,7 +452,7 @@ Accessible only to the `esadsa` account. Provides high-level controls:
 
 **System (7):** change_secret_key, toggle_registration, toggle_maintenance, toggle_event_mode, force_daily_reset, kill_bot_thread, generate_test_data
 
-**Ultra (2):** raw_sql (restricted: no DROP/ALTER), run_python_eval (esadsa only)
+**Ultra (2):** raw_sql (restricted: no DROP/ALTER), run_python_eval (admin only)
 
 </details>
 
@@ -574,8 +574,12 @@ On first launch:
 3. The bot thread starts running in the background
 4. Register a new account at `/register` and start playing
 
-### Default Account
-The admin user `esadsa` has special privileges. Create this account as your first user to access the admin panel at `/admin`.
+### Default Admin Account
+A default admin account is created automatically on first run:
+- **Username:** `admin`
+- **Password:** `admin`
+
+Log in and visit `/admin` to access the admin panel. Add other admin accounts via `/admin/secret` → `give_admin`.
 
 ---
 
@@ -675,8 +679,8 @@ All bot throttle values are live-tunable from `/admin/secret` without restarting
 
 | Method | Route | Description |
 |---|---|---|
-| GET/POST | `/admin` | Main admin panel (esadsa only) |
-| GET/POST | `/admin/secret` | Advanced admin panel (esadsa only) |
+| GET/POST | `/admin` | Main admin panel (admin only) |
+| GET/POST | `/admin/secret` | Advanced admin panel (admin only) |
 
 ---
 
