@@ -68,9 +68,25 @@
         }
         .games-menu a:hover { color: #ffd700; background: #2a2a3a; }
         nav { position: relative; z-index: 1001; }
+        .announcement-banner {
+            background: linear-gradient(135deg, #1a0a2e 0%, #2d1b4e 50%, #1a0a2e 100%);
+            color: #e0c0ff; text-align: center; padding: 14px 20px;
+            font-size: 0.95rem; letter-spacing: 0.3px;
+            border-bottom: 2px solid #7c3aed; box-shadow: 0 2px 12px rgba(124,58,237,0.25);
+        }
+        .announcement-banner strong { color: #ffd700; }
+        .announcement-banner a {
+            color: #a78bfa; font-weight: 700; text-decoration: underline;
+            text-underline-offset: 3px; transition: color 0.2s;
+        }
+        .announcement-banner a:hover { color: #c4b5fd; }
     </style>
 </head>
 <body>
+    <div class="announcement-banner">
+        🚨 This casino has <strong>moved permanently</strong> to a dedicated host.
+        Please visit <a href="https://window-wiper.site">window-wiper.site</a> to continue playing. 🚨
+    </div>
     <nav>
         <a href="{{ url_for('index') }}" class="logo">🍔<span>$</span> Cheeseburger</a>
         <div class="nav-links">
